@@ -12,7 +12,7 @@ from pykrx import stock
 
 
 def rebuild_kospi_top200_1y_csv(
-    out_csv_path: str = "kospi_top200_1y_daily.csv",
+    out_csv_path: str | None = None,
     n: int = 200,
     max_retries: int = 5,
     sleep_base: float = 0.2,          # 기본 텀(너무 빠르면 멈춤/차단 가능)
@@ -24,6 +24,10 @@ def rebuild_kospi_top200_1y_csv(
     """
     end_date = datetime.now().strftime("%Y%m%d")
     start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+    
+    # 파일명에 기간(start_date ~ end_date) 포함
+    if out_csv_path is None:
+        out_csv_path = f"kospi_top200_1y_daily_{start_date}_{end_date}.csv"
 
     cap = stock.get_market_cap(end_date, market="KOSPI").sort_values("시가총액", ascending=False)
     tickers = [str(t).zfill(6) for t in cap.index[:n].tolist()]

@@ -1,5 +1,6 @@
 import os
 import time
+import glob
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,6 +9,29 @@ from pykrx import stock
 import yfinance as yf
 
 CSV_PATH = "kospi_top200_1y_daily.csv"
+
+def get_latest_csv(pattern: str = "kospi_top200_1y_daily_*.csv") -> str:
+    """
+    가장 최신 CSV 파일을 찾아서 반환
+    
+    Args:
+        pattern: 파일 이름 패턴 (기본값: kospi_top200_1y_daily_*.csv)
+    
+    Returns:
+        파일 경로 (없으면 None)
+    """
+    files = sorted(glob.glob(pattern), reverse=True)
+    if files:
+        return files[0]
+    return None
+
+
+# 최신 CSV 파일 자동 감지
+csv_path = get_latest_csv()
+if csv_path is None:
+    CSV_PATH = "kospi_top200_1y_daily.csv"  # 폴백: 구형 파일명
+else:
+    CSV_PATH = csv_path
 
 st.set_page_config(page_title="KOSPI Swing Viewer", layout="wide")
 st.title("KOSPI Swing Viewer")

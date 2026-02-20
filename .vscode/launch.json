@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Streamlit: gui_test.py",
+            "name": "Streamlit: main.py",
             "type": "python",
             "request": "launch",
             "module": "streamlit",

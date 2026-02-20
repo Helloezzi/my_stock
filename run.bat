@@ -8,6 +8,6 @@ REM (선택) UTF-8 출력
 chcp 65001 >nul
 
 REM Streamlit 실행
-streamlit run ".\gui_test.py"
+streamlit run ".\main.py"
 
 endlocal
