@@ -435,7 +435,7 @@ if st.session_state.get("run_scan", False):
                 "score": "점수"
             })
 
-            st.dataframe(display_df, scan_df[show_cols], use_container_width=True, column_config={
+            st.dataframe(display_df, use_container_width=True, column_config={
                 "손익비(R/R)": st.column_config.NumberColumn(
                     help="(목표가 - 진입가) / (진입가 - 손절가)"
                 ),
@@ -444,6 +444,11 @@ if st.session_state.get("run_scan", False):
                 ),
             })
 
+            st.session_state["scan_levels"] = (
+                scan_df.set_index("ticker")[["entry", "stop", "target", "rr"]]
+                .to_dict(orient="index")
+            )
+
             pick = st.selectbox(
                 "Pick from results to view chart",
                 options=scan_df["ticker"].tolist(),
@@ -451,12 +456,6 @@ if st.session_state.get("run_scan", False):
                 key="scan_pick_selectbox",
             )
             st.session_state["selected_ticker"] = pick
-
-            row = scan_df[scan_df["ticker"] == pick].iloc[0]
-            st.session_state["selected_entry"] = float(row["entry"])
-            st.session_state["selected_stop"] = float(row["stop"])
-            st.session_state["selected_target"] = float(row["target"])
-            st.session_state["selected_rr"] = float(row["rr"])
 
     st.divider()
 
@@ -503,6 +502,18 @@ st.subheader(f"{selected} - {selected_name}")
 # ---------------------------
 sub = df[df["ticker"] == selected].sort_values("date").copy()
 
+# 스캐너 레벨이 있으면 그 값 사용, 없으면 데이터로 자동 계산
+levels = st.session_state.get("scan_levels", {}).get(selected, None)
+
+if levels:
+    entry_default = float(levels["entry"])
+    stop_default = float(levels["stop"])
+    target_default = float(levels["target"])
+else:
+    entry_default = float(sub["close"].iloc[-1])
+    stop_default = float(sub["low"].tail(10).min())
+    target_default = float(sub["high"].tail(20).max())
+
 st.subheader("Position Sizing (Auto)")
 
 # 기본값
@@ -510,18 +521,13 @@ capital = st.number_input("Capital (KRW)", min_value=0, value=1_000_000, step=10
 risk_pct = st.slider("Risk per trade (%)", 0.5, 5.0, 2.0, 0.1) / 100.0
 max_invest_pct = st.slider("Max invest per trade (%)", 10, 100, 50, 5) / 100.0
 
-# entry/stop은 스캐너에서 선택되면 자동 채움, 아니면 수동
-entry_default = float(st.session_state.get("selected_entry", sub["close"].iloc[-1]))
-stop_default = float(st.session_state.get("selected_stop", sub["low"].tail(10).min()))
-target_default = float(st.session_state.get("selected_target", sub["high"].tail(20).max()))
-
 col1, col2, col3 = st.columns(3)
 with col1:
-    entry = st.number_input("Entry", value=float(entry_default))
+    entry = st.number_input("Entry", value=float(entry_default), key=f"entry_{selected}")
 with col2:
-    stop = st.number_input("Stop", value=float(stop_default))
+    stop  = st.number_input("Stop", value=float(stop_default), key=f"stop_{selected}")
 with col3:
-    target = st.number_input("Target", value=float(target_default))
+    target= st.number_input("Target", value=float(target_default), key=f"target_{selected}")
 
 res = calc_position(capital, risk_pct, entry, stop, max_invest_pct=max_invest_pct)
 
