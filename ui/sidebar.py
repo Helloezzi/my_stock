@@ -2,16 +2,25 @@
 import streamlit as st
 from core.strategies.base import ScanParams
 
+TAB_KEY = "active_tab"
 
 def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
     out = {}
 
     st.sidebar.title("Menu")
 
+    # ✅ 최초 1회만 Data 탭
+    if TAB_KEY not in st.session_state:
+        st.session_state[TAB_KEY] = "Data"
+
+    tabs = ["Data", "Scanner", "Browse"]
+
+    # ✅ sidebar에 렌더
     tab = st.sidebar.radio(
         "Select",
-        ["Data", "Scanner", "Browse"],
-        index=1,
+        tabs,
+        key=TAB_KEY,
+        index=tabs.index(st.session_state[TAB_KEY]) if st.session_state[TAB_KEY] in tabs else 0,
     )
     out["tab"] = tab
 
@@ -19,22 +28,7 @@ def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
 
     if tab == "Data":
         st.sidebar.subheader("Data")
-
-        selected_csv = st.sidebar.selectbox(
-            "CSV file",
-            options=csv_options,
-            index=csv_default_index if csv_options else 0,
-        )
-        out["selected_csv"] = selected_csv
-
-        end_date = st.sidebar.date_input("End Date")
-        lookback = st.sidebar.selectbox("Lookback", ["6mo", "1y", "2y"], index=1)
-
-        rebuild_clicked = st.sidebar.button("Rebuild CSV")
-
-        out["end_date"] = end_date
-        out["lookback"] = lookback
-        out["rebuild_clicked"] = rebuild_clicked
+        st.sidebar.caption("Manage datasets in the main view →")
 
     elif tab == "Scanner":
         st.sidebar.subheader("Scanner")
@@ -60,7 +54,6 @@ def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
         target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20, key="tlb")
         min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1, key="mrr")
 
-        # ✅ dict 말고 ScanParams 객체로 반환
         out["params"] = ScanParams(
             tolerance=tolerance,
             stop_lookback=stop_lookback,

@@ -8,7 +8,7 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
         return None
 
     st.subheader("Scanner Results")
-
+    
     display_df = scan_df.copy()
 
     # 보기용 name 컬럼
