@@ -4,36 +4,46 @@ import plotly.graph_objects as go
 
 from core.position import calc_position
 from core.links import naver_stock_url
+# ui/chart_view.py
 
+def render_search_and_select(
+    tickers,
+    name_map,
+    state_key="selected_browse_ticker",
+    title="Search Top200",
+):
+    st.subheader(title)
 
-def render_search_and_select(tickers: list[str], name_map: dict[str, str]) -> str:
-    query = st.text_input("Search (Ticker or Name)", value="", placeholder="예: 005930 또는 삼성")
+    q = st.text_input(
+        "Search (Ticker or Name)",
+        value="",
+        key=f"{state_key}_search",
+    ).strip()
 
-    options = []
-    q = query.strip()
+    filtered = []
     for t in tickers:
         nm = name_map.get(t, t)
-        label = f"{t} - {nm}"
-        if not q:
-            options.append(label)
-        else:
-            if q.lower() in t.lower() or q in str(nm):
-                options.append(label)
+        if not q or q.lower() in t.lower() or q in str(nm):
+            filtered.append(t)
 
-    if not options:
-        st.warning("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
-        st.stop()
+    if not filtered:
+        st.warning("검색 결과가 없습니다.")
+        return None
 
-    current_t = st.session_state.get("selected_ticker", tickers[0])
-    current_label = f"{current_t} - {name_map.get(current_t, current_t)}"
-    try:
-        current_idx = options.index(current_label)
-    except ValueError:
-        current_idx = 0
+    current = st.session_state.get(state_key, filtered[0])
+    if current not in filtered:
+        current = filtered[0]
+        st.session_state[state_key] = current
 
-    selected_display = st.selectbox("Select Ticker", options, index=current_idx, key="main_selectbox")
-    selected = selected_display.split(" - ")[0]
-    st.session_state["selected_ticker"] = selected
+    selected = st.selectbox(
+        "Select Ticker",
+        options=filtered,
+        index=filtered.index(current),
+        format_func=lambda x: f"{x} - {name_map.get(x, x)}",
+        key=f"{state_key}_selectbox",
+    )
+
+    st.session_state[state_key] = selected
     return selected
 
 
@@ -45,55 +55,72 @@ def render_naver_link(ticker: str) -> None:
     )
 
 
-def render_position_sizing(selected: str, sub: pd.DataFrame, scan_levels: dict | None):
-    levels = (scan_levels or {}).get(selected, None)
-
-    if levels:
-        entry_default = float(levels["entry"])
-        stop_default = float(levels["stop"])
-        target_default = float(levels["target"])
-    else:
-        entry_default = float(sub["close"].iloc[-1])
-        stop_default = float(sub["low"].tail(10).min())
-        target_default = float(sub["high"].tail(20).max())
-
-    st.subheader("Position Sizing (Auto)")
-
-    capital = st.number_input("Capital (KRW)", min_value=0, value=1_000_000, step=100_000)
-    risk_pct = st.slider("Risk per trade (%)", 0.5, 5.0, 2.0, 0.1) / 100.0
-    max_invest_pct = st.slider("Max invest per trade (%)", 10, 100, 50, 5) / 100.0
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        entry = st.number_input("Entry", value=float(entry_default), key=f"entry_{selected}")
-    with col2:
-        stop = st.number_input("Stop", value=float(stop_default), key=f"stop_{selected}")
-    with col3:
-        target = st.number_input("Target", value=float(target_default), key=f"target_{selected}")
-
-    res = calc_position(capital, risk_pct, entry, stop, max_invest_pct=max_invest_pct)
-
-    if res is None:
-        st.error("Stop must be lower than Entry.")
-        return float(entry), float(stop), float(target)
-
-    qty = res["qty"]
-    invest = res["invest"]
-    loss_at_stop = res["loss_at_stop"]
-    rr = (target - entry) / (entry - stop) if (entry - stop) > 0 else 0.0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Qty (shares)", f"{qty:,}")
-    c2.metric("Invest (KRW)", f"{invest:,.0f}")
-    c3.metric("Loss @ Stop", f"{loss_at_stop:,.0f}")
-    c4.metric("R/R", f"{rr:.2f}")
-
-    st.caption(
-        f"Risk budget: {res['risk_budget']:,.0f} KRW | "
-        f"Per-share risk: {res['per_share_risk']:,.0f} KRW"
+def render_position_sizing(selected, sub, scan_levels, key_prefix: str = "ps"):
+    # ✅ 사용자 설정 값(종목 바뀌어도 유지)
+    capital = st.number_input(
+        "Capital (KRW)",
+        min_value=0,
+        value=1_000_000,
+        step=100_000,
+        key=f"{key_prefix}_capital",
     )
 
-    return float(entry), float(stop), float(target)
+    risk_pct = st.slider(
+        "Risk per trade (%)",
+        0.1, 5.0, 2.0, 0.1,
+        key=f"{key_prefix}_risk_pct",
+    )
+
+    max_invest_pct = st.slider(
+        "Max invest per trade (%)",
+        1, 100, 50,
+        key=f"{key_prefix}_max_invest_pct",
+    )
+
+    # ✅ 기본 Entry/Stop/Target 계산 (scan_levels가 있으면 그걸 우선)
+    level = None
+    if isinstance(scan_levels, dict):
+        level = scan_levels.get(selected)
+
+    if level:
+        default_entry = float(level.get("entry", 0.0))
+        default_stop = float(level.get("stop", 0.0))
+        default_target = float(level.get("target", 0.0))
+    else:
+        default_entry = float(sub["close"].iloc[-1]) if len(sub) else 0.0
+        default_stop = default_entry * 0.95
+        default_target = default_entry * 1.10
+
+    # ✅ 핵심: Entry/Stop/Target은 "종목별 key"로 분리해야 선택 변경 시 갱신됨
+    entry_key = f"{key_prefix}_entry_{selected}"
+    stop_key = f"{key_prefix}_stop_{selected}"
+    target_key = f"{key_prefix}_target_{selected}"
+
+    entry = st.number_input(
+        "Entry",
+        min_value=0.0,
+        value=float(default_entry),
+        step=1.0,
+        key=entry_key,
+    )
+
+    stop = st.number_input(
+        "Stop",
+        min_value=0.0,
+        value=float(default_stop),
+        step=1.0,
+        key=stop_key,
+    )
+
+    target = st.number_input(
+        "Target",
+        min_value=0.0,
+        value=float(default_target),
+        step=1.0,
+        key=target_key,
+    )
+
+    return entry, stop, target
 
 
 def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
@@ -148,3 +175,18 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
     vol_fig.add_trace(go.Bar(x=sub["date"], y=sub["volume"], name="Volume"))
     vol_fig.update_layout(height=250, yaxis=dict(tickformat=","))
     st.plotly_chart(vol_fig, use_container_width=True)
+
+
+def render_chart_and_sizing_two_column(*, selected: str, sub, scan_levels, key_prefix: str):
+    col_chart, col_ps = st.columns([2.2, 1.0], gap="large")
+
+    with col_ps:
+        entry, stop, target = render_position_sizing(
+            selected, sub, scan_levels,
+            key_prefix=key_prefix,   # ✅
+        )
+
+    with col_chart:
+        render_chart(sub, entry, stop, target)
+
+    return entry, stop, target

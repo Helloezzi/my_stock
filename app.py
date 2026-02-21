@@ -1,118 +1,125 @@
+# app.py
 import os
-import time
+from datetime import datetime
 import streamlit as st
 
-import download_kospi as dk
-
-from core.config import APP_TITLE
-from core.data_loader import resolve_csv_path, load_data, get_ticker_name_map
+from core.config import APP_TITLE, DATA_DIR, CSV_PREFIX
+from core.data_loader import list_csv_files, load_data, get_ticker_name_map
 from core.market_index import load_kospi_index_1y
 from core.market_filter import kospi_market_ok
 from core.strategies import get_strategies
+
 from ui.sidebar import render_sidebar
 from ui.scanner_view import render_scanner_results
+from ui.chart_view import render_search_and_select
+
 from ui.chart_view import (
     render_search_and_select,
     render_naver_link,
     render_position_sizing,
     render_chart,
+    render_chart_and_sizing_two_column,
 )
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
-st.caption(f"Running file: {os.path.abspath(__file__)}")
 
-# --- Strategies ---
 strategies = get_strategies()
 strategy_by_label = {s.name: s for s in strategies}
 strategy_labels = list(strategy_by_label.keys())
 
-# --- Sidebar ---
-sb = render_sidebar(strategy_labels=strategy_labels)
+csv_files = list_csv_files()
+csv_labels = [p.name for p in csv_files]
 
-# --- CSV path ---
-CSV_PATH = resolve_csv_path()
+sb = render_sidebar(
+    strategy_labels=strategy_labels,
+    csv_options=csv_labels,
+)
 
-# --- Data rebuild ---
-if sb["tab"] == "Data" and sb["rebuild_clicked"]:
-    with st.status("Downloading... (rebuild 1Y)", expanded=True) as status:
-        try:
-            if os.path.exists(CSV_PATH):
-                os.remove(CSV_PATH)
-
-            out_path, failed = dk.rebuild_kospi_top200_1y_csv(out_csv_path=CSV_PATH, n=200)
-            st.success(f"Saved: {out_path}")
-            if failed:
-                st.warning(
-                    f"Failed tickers ({len(failed)}): {', '.join(failed[:20])}"
-                    + (" ..." if len(failed) > 20 else "")
-                )
-            status.update(label=f"Done ✅ Saved: {out_path}", state="complete")
-            st.toast("Data rebuilt successfully", icon="✅")
-
-            time.sleep(0.2)
-            st.cache_data.clear()
-            st.rerun()
-
-        except Exception as e:
-            status.update(label="Failed ❌", state="error")
-            st.exception(e)
-
-# --- Load CSV ---
-if not os.path.exists(CSV_PATH):
-    st.warning(f"CSV not found: {CSV_PATH}\n\nGo to **Data** tab and press **Rebuild**.")
+if not csv_files:
+    st.warning("No CSV found.")
     st.stop()
 
-df = load_data(CSV_PATH)
+selected_csv_path = csv_files[0]
+df = load_data(str(selected_csv_path))
+
 tickers = sorted(df["ticker"].unique())
 name_map = get_ticker_name_map(tickers)
 
-if "selected_ticker" not in st.session_state:
-    st.session_state["selected_ticker"] = tickers[0]
+# 상태 분리
+if "selected_scan_ticker" not in st.session_state:
+    st.session_state["selected_scan_ticker"] = None
 
-# --- Scanner ---
-if sb["run_scan"]:
-    st.session_state["run_scan"] = True
-    st.session_state["scan_params"] = sb["params"]
-    st.session_state["market_mode"] = sb["market_mode"]
-    st.session_state["strategy_label"] = sb["selected_strategy_label"]
+if "selected_browse_ticker" not in st.session_state:
+    st.session_state["selected_browse_ticker"] = tickers[0]
 
-if st.session_state.get("run_scan", False):
-    params = st.session_state.get("scan_params", sb["params"])
-    market_mode = st.session_state.get("market_mode", sb["market_mode"])
-    strategy_label = st.session_state.get("strategy_label", strategy_labels[0])
+# =========================
+# SCANNER TAB
+# =========================
+if sb["tab"] == "Scanner":
 
-    idx_df = load_kospi_index_1y()
-    ok, msg = kospi_market_ok(idx_df, mode=market_mode)
+    if sb.get("run_scan"):
+        idx_df = load_kospi_index_1y()
+        ok, msg = kospi_market_ok(idx_df, mode=sb["market_mode"])
+        st.session_state["market_ok"] = ok
+        st.session_state["market_msg"] = msg
 
-    st.write(f"Market filter: **{msg}**")
+        if ok:
+            strategy = strategy_by_label[sb["selected_strategy_label"]]
+            scan_df = strategy.scan(df, sb["params"])
+            st.session_state["scan_df"] = scan_df
+        else:
+            st.session_state["scan_df"] = None
 
-    if not ok:
-        st.warning("KOSPI filter blocked scan.")
-    else:
-        strategy = strategy_by_label[strategy_label]
-        scan_df = strategy.scan(df, params)
+    scan_df = st.session_state.get("scan_df")
 
-        pick = render_scanner_results(scan_df, name_map)
-        if pick:
-            st.session_state["selected_ticker"] = pick
-            # 차트/포지션 기본값용
-            st.session_state["scan_levels"] = (
-                scan_df.set_index("ticker")[["entry", "stop", "target", "rr"]]
-                .to_dict(orient="index")
-            )
+    if scan_df is None:
+        st.info("Run Scan first.")
+        st.stop()
 
-    st.divider()
+    active = render_scanner_results(
+        scan_df,
+        name_map,
+        state_key="selected_scan_ticker",
+    )
 
-# --- Search + Select ---
-selected = render_search_and_select(tickers, name_map)
-selected_name = name_map.get(selected, selected)
-st.subheader(f"{selected} - {selected_name}")
-render_naver_link(selected)
+# =========================
+# BROWSE TAB
+# =========================
+elif sb["tab"] == "Browse":
 
-# --- Chart ---
-sub = df[df["ticker"] == selected].sort_values("date").copy()
-scan_levels = st.session_state.get("scan_levels", None)
+    active = render_search_and_select(
+        tickers,
+        name_map,
+        state_key="selected_browse_ticker",
+        title="Browse KOSPI Top200",
+    )
 
-entry, stop, target = render_position_sizing(selected, sub, scan_levels)
-render_chart(sub, entry, stop, target)
+# =========================
+# 공통 차트 영역
+# =========================
+if sb["tab"] == "Scanner":
+    selected = st.session_state.get("selected_scan_ticker")
+    scan_levels = st.session_state.get("scan_levels", None)
+elif sb["tab"] == "Browse":
+    selected = st.session_state.get("selected_browse_ticker")
+    scan_levels = None
+else:
+    selected = None
+    scan_levels = None
+
+if selected:
+    selected_name = name_map.get(selected, selected)
+    st.subheader(f"{selected} - {selected_name}")
+    render_naver_link(selected)
+
+    sub = df[df["ticker"] == selected].sort_values("date").copy()
+
+    prefix = "ps_scan" if sb["tab"] == "Scanner" else "ps_browse"
+
+    render_chart_and_sizing_two_column(
+        selected=selected,
+        sub=sub,
+        scan_levels=scan_levels,
+        key_prefix=prefix,
+    )

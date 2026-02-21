@@ -1,66 +1,77 @@
-import os
-import time
+# ui/sidebar.py
 import streamlit as st
-
 from core.strategies.base import ScanParams
 
 
-def render_sidebar(*, strategy_labels: list[str]) -> dict:
-    """
-    Returns:
-      dict with keys:
-        tab, rebuild_clicked, run_scan, market_mode, params, selected_strategy_label
-    """
-    out = {
-        "tab": "Data",
-        "rebuild_clicked": False,
-        "run_scan": False,
-        "market_mode": "close_above_ma20",
-        "params": ScanParams(),
-        "selected_strategy_label": strategy_labels[0] if strategy_labels else "",
-    }
+def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
+    out = {}
 
-    with st.sidebar:
-        st.header("Menu")
-        tab = st.radio("Select", ["Data", "Scanner"], index=0)
-        out["tab"] = tab
-        st.divider()
+    st.sidebar.title("Menu")
 
-        if tab == "Data":
-            st.subheader("Data")
-            out["rebuild_clicked"] = st.button("Rebuild (Last 1Y, KOSPI Top200)", type="primary")
+    tab = st.sidebar.radio(
+        "Select",
+        ["Data", "Scanner", "Browse"],
+        index=1,
+    )
+    out["tab"] = tab
 
-        elif tab == "Scanner":
-            st.subheader("Scanner")
-            st.caption("Strategy + Market filter + Parameters")
+    st.sidebar.divider()
 
-            out["selected_strategy_label"] = st.selectbox(
-                "Strategy",
-                options=strategy_labels,
-                index=0,
-            )
+    if tab == "Data":
+        st.sidebar.subheader("Data")
 
-            out["market_mode"] = st.selectbox(
-                "KOSPI filter",
-                ["close_above_ma20", "ma20_above_ma60", "both"],
-                index=0
-            )
+        selected_csv = st.sidebar.selectbox(
+            "CSV file",
+            options=csv_options,
+            index=csv_default_index if csv_options else 0,
+        )
+        out["selected_csv"] = selected_csv
 
-            tolerance = st.slider("MA20 tolerance (%)", 1, 10, 3) / 100
-            stop_lookback = st.slider("Stop lookback (days)", 5, 30, 10)
-            stop_buffer = st.slider("Stop buffer (%)", 0.0, 3.0, 0.5, 0.1) / 100
-            target_lookback = st.slider("Target lookback (days)", 10, 90, 20)
-            min_rr = st.slider("Min R/R", 0.5, 5.0, 1.5, 0.1)
+        end_date = st.sidebar.date_input("End Date")
+        lookback = st.sidebar.selectbox("Lookback", ["6mo", "1y", "2y"], index=1)
 
-            out["params"] = ScanParams(
-                tolerance=tolerance,
-                stop_lookback=stop_lookback,
-                stop_buffer=stop_buffer,
-                target_lookback=target_lookback,
-                min_rr=min_rr,
-            )
+        rebuild_clicked = st.sidebar.button("Rebuild CSV")
 
-            if st.button("Run Scan", type="primary"):
-                out["run_scan"] = True
+        out["end_date"] = end_date
+        out["lookback"] = lookback
+        out["rebuild_clicked"] = rebuild_clicked
+
+    elif tab == "Scanner":
+        st.sidebar.subheader("Scanner")
+        st.sidebar.caption("Strategy + Market filter + Parameters")
+
+        out["selected_strategy_label"] = st.sidebar.selectbox(
+            "Strategy",
+            options=strategy_labels,
+            index=0,
+            key="strategy_select",
+        )
+
+        out["market_mode"] = st.sidebar.selectbox(
+            "KOSPI filter",
+            ["close_above_ma20", "ma20_above_ma60", "both"],
+            index=0,
+            key="market_mode_select",
+        )
+
+        tolerance = st.sidebar.slider("MA20 tolerance (%)", 1, 10, 3, key="tol") / 100
+        stop_lookback = st.sidebar.slider("Stop lookback (days)", 5, 30, 10, key="slb")
+        stop_buffer = st.sidebar.slider("Stop buffer (%)", 0.0, 3.0, 0.5, 0.1, key="sbuf") / 100
+        target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20, key="tlb")
+        min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1, key="mrr")
+
+        # ✅ dict 말고 ScanParams 객체로 반환
+        out["params"] = ScanParams(
+            tolerance=tolerance,
+            stop_lookback=stop_lookback,
+            stop_buffer=stop_buffer,
+            target_lookback=target_lookback,
+            min_rr=min_rr,
+        )
+
+        out["run_scan"] = st.sidebar.button("Run Scan", type="primary", key="run_scan_btn")
+
+    elif tab == "Browse":
+        st.sidebar.subheader("Browse Top200")
 
     return out
