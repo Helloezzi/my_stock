@@ -1,1 +1,13 @@
-__pycache__/download_kospi.cpython-311.pyc
+__pycache__/
+*.pyc
+*.pyo
+
+.venv/
+venv/
+env/
+
+.DS_Store
+.vscode/
+
+# data artifacts (원하면 유지)
+kospi_top200_1y_daily*.csv
