@@ -28,6 +28,7 @@ class PullbackRRStrategy(Strategy):
                 continue
 
             # Core indicators
+            g["ma5"] = g["close"].rolling(5).mean()
             g["ma20"] = g["close"].rolling(20).mean()
             g["ma60"] = g["close"].rolling(60).mean()
             g["vol_ma20"] = g["volume"].rolling(20).mean()
@@ -74,6 +75,22 @@ class PullbackRRStrategy(Strategy):
             if rr < params.min_rr:
                 continue
 
+            # MA5 slope (short-term momentum)
+            ma5_now = float(last["ma5"]) if not pd.isna(last.get("ma5")) else None
+            ma5_3ago = float(g["ma5"].iloc[-4]) if len(g) >= 4 and not pd.isna(g["ma5"].iloc[-4]) else ma5_now
+
+            ma5_slope_3d = 0.0
+            if ma5_now is not None and ma5_3ago is not None and ma5_3ago != 0:
+                ma5_slope_3d = (ma5_now / ma5_3ago - 1.0)
+
+            # +1% / 3D => 1.0, 0% => 0.0, 음수 => 0.0
+            ma5_slope_score = _clamp01(ma5_slope_3d / 0.01)
+
+            # MA5 slope filter (optional)
+            if params.require_ma5_positive:
+                if ma5_slope_3d <= params.ma5_min_slope:
+                    continue
+
             # =========================
             # Scoring (0..100)
             # =========================
@@ -111,10 +128,11 @@ class PullbackRRStrategy(Strategy):
             # Weighted total (0..1)
             total01 = (
                 0.35 * rr_pref
-                + 0.25 * trend_score
+                + 0.20 * trend_score
                 + 0.15 * vol_score
                 + 0.10 * vol_score2
-                + 0.15 * rs_score
+                + 0.10 * rs_score
+                + 0.10 * ma5_slope_score
             )
             score = 100.0 * total01
 
@@ -127,6 +145,10 @@ class PullbackRRStrategy(Strategy):
                 "risk": risk,
                 "reward": reward,
                 "rr": float(rr),
+                
+                "ma5": float(last["ma5"]),
+                "ma5_slope_3d": float(ma5_slope_3d),
+                "ma5_slope_score": float(ma5_slope_score),
 
                 # raw info (optional)
                 "ma20": float(last["ma20"]),
@@ -149,6 +171,7 @@ class PullbackRRStrategy(Strategy):
         if not results:
             return pd.DataFrame(columns=[
                 "ticker","date","entry","stop","target","risk","reward","rr",
+                "ma5","ma5_slope_3d","ma5_slope_score",
                 "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
                 "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
             ])
@@ -161,10 +184,11 @@ class PullbackRRStrategy(Strategy):
         # Recompute final score including rs_score
         total01 = (
             0.35 * out["rr_pref"]
-            + 0.25 * out["trend_score"]
+            + 0.20 * out["trend_score"]
             + 0.15 * out["vol_score"]
             + 0.10 * out["vol_score2"]
-            + 0.15 * out["rs_score"]
+            + 0.10 * out["rs_score"]
+            + 0.10 * out["ma5_slope_score"]
         )
         out["score"] = (100.0 * total01).astype(float)
 

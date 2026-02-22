@@ -29,6 +29,12 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
     df = scan_df.copy()
     df["name"] = df["ticker"].map(lambda x: name_map.get(x, x))
 
+    if "ma5_slope_3d" in df.columns:
+        df["ma5_slope_%"] = (df["ma5_slope_3d"] * 100).round(2)
+
+    if "ma5_slope_score" in df.columns:
+        df["ma5_score"] = df["ma5_slope_score"].round(2)
+
     # ✅ 1) 먼저 "원본 컬럼명" 기준으로 보여줄 컬럼만 선택
     keep_cols = [
         "ticker", "name", "date",
@@ -37,6 +43,8 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
         "rr_pref", "trend_score", "rs_score", "vol_score",
         "vol_ratio_5v20",
         "score",
+        "ma5_slope_%",
+        "ma5_score",
     ]
     df = df[[c for c in keep_cols if c in df.columns]]
 
@@ -56,6 +64,9 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
         "rs_score": "상대강도",
         "vol_score": "변동성",
         "score": "총점",
+        
+        "ma5_slope_%": "MA5기울기(%)",
+        "ma5_score": "MA5점수",
     }
     df = df.rename(columns=col_rename)
 
@@ -64,7 +75,7 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
         "이름", "코드", "기준",
         "진입", "손절", "목표",
         "R/R",
-        "RR선호", "추세", "상대강도", "변동성",
+        "RR선호", "추세", "MA5기울기(%)", "MA5점수", "상대강도", "변동성",
         "거래",
         "총점",
     ]
@@ -79,7 +90,7 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
             display_df_show[c] = display_df_show[c].map(_fmt_int)
 
     # ✅ 비율/점수 계열
-    float_cols = ["R/R", "RR선호", "추세", "상대강도", "변동성", "거래", "총점"]
+    float_cols = ["R/R", "RR선호", "추세", "MA5기울기(%)", "MA5점수", "상대강도", "변동성", "거래", "총점"]
     for c in float_cols:
         if c in display_df_show.columns:
             # R/R 같은 건 2~3자리 취향. 우선 2자리 추천

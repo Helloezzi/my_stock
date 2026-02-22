@@ -54,12 +54,28 @@ def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
         target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20, key="tlb")
         min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1, key="mrr")
 
+        require_ma5_positive = st.sidebar.checkbox(
+            "MA5 재가속 필터 (MA5 slope > threshold)",
+            value=False,
+            key="require_ma5_positive",
+        )
+
+        ma5_min_slope_pct = 0.0
+        if require_ma5_positive:
+            ma5_min_slope_pct = st.sidebar.slider(
+                "MA5 최소 기울기 (%) (3일 기준)",
+                0.0, 3.0, 0.0, 0.1,
+                key="ma5_min_slope_pct",
+            )
+
         out["params"] = ScanParams(
             tolerance=tolerance,
             stop_lookback=stop_lookback,
             stop_buffer=stop_buffer,
             target_lookback=target_lookback,
             min_rr=min_rr,
+            require_ma5_positive=require_ma5_positive,
+            ma5_min_slope=ma5_min_slope_pct / 100.0,  # % -> ratio
         )
 
         out["run_scan"] = st.sidebar.button("Run Scan", type="primary", key="run_scan_btn")

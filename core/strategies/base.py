@@ -11,6 +11,8 @@ class ScanParams:
     stop_buffer: float = 0.005
     target_lookback: int = 20
     min_rr: float = 1.5
+    require_ma5_positive: bool = False   # 기본 OFF
+    ma5_min_slope: float = 0.0           # 0.0 = 단순 양수
 
 class Strategy(ABC):
     key: str
