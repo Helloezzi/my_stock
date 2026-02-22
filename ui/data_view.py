@@ -51,50 +51,50 @@ def render_data_tab() -> Optional[Path]:
         files = sorted(list_csv_files(), key=_sort_key_csv, reverse=True)
         if not files:
             st.warning("No CSV found.")
-            return None
+            #return None
+        else:
+            names = [p.name for p in files]
 
-        names = [p.name for p in files]
+            # ✅ 최신 파일(맨 위)을 기본값으로 사용
+            latest = names[0]
 
-        # ✅ 최신 파일(맨 위)을 기본값으로 사용
-        latest = names[0]
+            # ✅ pending(다운로드 직후)은 최우선
+            pending = st.session_state.get(PENDING_ACTIVE_KEY)
+            if pending and pending in names:
+                st.session_state[ACTIVE_KEY] = pending
+                st.session_state[RADIO_KEY] = pending
+                del st.session_state[PENDING_ACTIVE_KEY]
 
-        # ✅ pending(다운로드 직후)은 최우선
-        pending = st.session_state.get(PENDING_ACTIVE_KEY)
-        if pending and pending in names:
-            st.session_state[ACTIVE_KEY] = pending
-            st.session_state[RADIO_KEY] = pending
-            del st.session_state[PENDING_ACTIVE_KEY]
+            # ✅ active가 없거나(첫 진입) 현재 목록에 없으면 → 최신으로 자동 선택
+            active = st.session_state.get(ACTIVE_KEY)
+            if (not active) or (active not in names):
+                st.session_state[ACTIVE_KEY] = latest
+                st.session_state[RADIO_KEY] = latest
 
-        # ✅ active가 없거나(첫 진입) 현재 목록에 없으면 → 최신으로 자동 선택
-        active = st.session_state.get(ACTIVE_KEY)
-        if (not active) or (active not in names):
-            st.session_state[ACTIVE_KEY] = latest
-            st.session_state[RADIO_KEY] = latest
+            # ✅ radio 값이 깨졌으면 active로 복구 (위젯 생성 전)
+            if st.session_state.get(RADIO_KEY) not in names:
+                st.session_state[RADIO_KEY] = st.session_state[ACTIVE_KEY]
 
-        # ✅ radio 값이 깨졌으면 active로 복구 (위젯 생성 전)
-        if st.session_state.get(RADIO_KEY) not in names:
-            st.session_state[RADIO_KEY] = st.session_state[ACTIVE_KEY]
+            active = st.session_state[ACTIVE_KEY]
+            st.caption(f"Active: **{active}**")
 
-        active = st.session_state[ACTIVE_KEY]
-        st.caption(f"Active: **{active}**")
+            # ✅ radio 변경 시 즉시 active 반영
+            def _on_dataset_change():
+                st.session_state[ACTIVE_KEY] = st.session_state[RADIO_KEY]
+                # 캐시/스캔 상태 리셋
+                st.session_state.pop("scan_df", None)
+                st.session_state.pop("scan_levels", None)
+                st.session_state.pop("selected_scan_ticker", None)
+                st.cache_data.clear()
+                # on_change는 rerun을 자동으로 유발하므로 st.rerun()은 보통 불필요
+                # (원하면 넣어도 되지만, 중복 rerun으로 깜빡임이 늘 수 있음)
 
-        # ✅ radio 변경 시 즉시 active 반영
-        def _on_dataset_change():
-            st.session_state[ACTIVE_KEY] = st.session_state[RADIO_KEY]
-            # 캐시/스캔 상태 리셋
-            st.session_state.pop("scan_df", None)
-            st.session_state.pop("scan_levels", None)
-            st.session_state.pop("selected_scan_ticker", None)
-            st.cache_data.clear()
-            # on_change는 rerun을 자동으로 유발하므로 st.rerun()은 보통 불필요
-            # (원하면 넣어도 되지만, 중복 rerun으로 깜빡임이 늘 수 있음)
-
-        st.radio(
-            "Active CSV",
-            options=names,
-            key=RADIO_KEY,
-            on_change=_on_dataset_change,
-        )
+            st.radio(
+                "Active CSV",
+                options=names,
+                key=RADIO_KEY,
+                on_change=_on_dataset_change,
+            )
 
     # -------------------------
     # Right: Download controls
