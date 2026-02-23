@@ -177,6 +177,12 @@ def render_position_sizing(selected, sub, scan_levels, key_prefix: str = "ps"):
 
 def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
     sub = sub.copy()
+    sub["date"] = pd.to_datetime(sub["date"], errors="coerce")
+    sub = sub.dropna(subset=["date"])
+
+    x0 = pd.Timestamp(sub["date"].iloc[0])
+    x1 = pd.Timestamp(sub["date"].iloc[-1])
+    x1_pad = x1 + pd.Timedelta(days=7)
 
     sub["ma5"] = sub["close"].rolling(5).mean()
     sub["ma20"] = sub["close"].rolling(20).mean()
@@ -318,11 +324,11 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
             showgrid=True,
             gridcolor="rgba(255,255,255,0.05)",
         ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.05)",
-            tickformat=","
-        ),
+        # yaxis=dict(
+        #     showgrid=True,
+        #     gridcolor="rgba(255,255,255,0.05)",
+        #     tickformat=","
+        # ),
         yaxis2=dict(
             overlaying="y",
             side="right",

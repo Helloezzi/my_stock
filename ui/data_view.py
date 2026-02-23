@@ -10,7 +10,7 @@ import streamlit as st
 
 import download_kospi as dk
 from core.config import DATA_DIR
-from core.data_loader import list_csv_files
+from core.data_loader_old import list_csv_files
 
 
 RADIO_KEY = "dataset_radio"
@@ -103,7 +103,7 @@ def render_data_tab() -> Optional[Path]:
         st.subheader("Download")
 
         end_date = st.date_input("End date")
-        lookback = st.selectbox("Lookback", ["6mo", "1y", "2y"], index=1)
+        lookback = st.selectbox("Lookback", ["1d", "6mo", "1y", "2y"], index=1)
 
         universe = st.selectbox(
             "Universe",

@@ -4,35 +4,61 @@ from core.strategies.base import ScanParams
 
 TAB_KEY = "active_tab"
 
-def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
+def _market_and_topn_controls(prefix: str = ""):
+    market = st.sidebar.selectbox(
+        "Market",
+        options=["KOSPI", "KOSDAQ"],
+        index=0,
+        key=f"{prefix}market_select",
+    )
+
+    use_all = st.sidebar.checkbox(
+        "Use all tickers (no Top-N limit)",
+        value=True,
+        key=f"{prefix}use_all_tickers",
+    )
+
+    top_n = None
+    if not use_all:
+        top_n = int(
+            st.sidebar.number_input(
+                "Top N (by market cap on latest date)",
+                min_value=10,
+                max_value=3000,
+                value=200,
+                step=10,
+                key=f"{prefix}top_n_input",
+            )
+        )
+    return market, top_n
+
+
+def render_sidebar(strategy_labels):
     out = {}
 
     st.sidebar.title("Menu")
 
-    # ✅ 최초 1회만 Data 탭
     if TAB_KEY not in st.session_state:
-        st.session_state[TAB_KEY] = "Data"
+        st.session_state[TAB_KEY] = "Scanner"
 
-    tabs = ["Data", "Scanner", "Browse"]
+    tabs = ["Scanner", "Browse"]
 
-    # ✅ sidebar에 렌더
     tab = st.sidebar.radio(
         "Select",
         tabs,
         key=TAB_KEY,
-        index=tabs.index(st.session_state[TAB_KEY]) if st.session_state[TAB_KEY] in tabs else 0,
+        index=tabs.index(st.session_state[TAB_KEY]),
     )
     out["tab"] = tab
 
     st.sidebar.divider()
 
-    if tab == "Data":
-        st.sidebar.subheader("Data")
-        st.sidebar.caption("Manage datasets in the main view →")
-
-    elif tab == "Scanner":
+    if tab == "Scanner":
         st.sidebar.subheader("Scanner")
-        st.sidebar.caption("Strategy + Market filter + Parameters")
+
+        market, top_n = _market_and_topn_controls(prefix="scan_")
+        out["market"] = market
+        out["top_n"] = top_n
 
         out["selected_strategy_label"] = st.sidebar.selectbox(
             "Strategy",
@@ -48,25 +74,11 @@ def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
             key="market_mode_select",
         )
 
-        tolerance = st.sidebar.slider("MA20 tolerance (%)", 1, 10, 3, key="tol") / 100
-        stop_lookback = st.sidebar.slider("Stop lookback (days)", 5, 30, 10, key="slb")
-        stop_buffer = st.sidebar.slider("Stop buffer (%)", 0.0, 3.0, 0.5, 0.1, key="sbuf") / 100
-        target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20, key="tlb")
-        min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1, key="mrr")
-
-        require_ma5_positive = st.sidebar.checkbox(
-            "MA5 재가속 필터 (MA5 slope > threshold)",
-            value=False,
-            key="require_ma5_positive",
-        )
-
-        ma5_min_slope_pct = 0.0
-        if require_ma5_positive:
-            ma5_min_slope_pct = st.sidebar.slider(
-                "MA5 최소 기울기 (%) (3일 기준)",
-                0.0, 3.0, 0.0, 0.1,
-                key="ma5_min_slope_pct",
-            )
+        tolerance = st.sidebar.slider("MA20 tolerance (%)", 1, 10, 3) / 100
+        stop_lookback = st.sidebar.slider("Stop lookback (days)", 5, 30, 10)
+        stop_buffer = st.sidebar.slider("Stop buffer (%)", 0.0, 3.0, 0.5, 0.1) / 100
+        target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20)
+        min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1)
 
         out["params"] = ScanParams(
             tolerance=tolerance,
@@ -74,13 +86,15 @@ def render_sidebar(strategy_labels, csv_options, csv_default_index=0):
             stop_buffer=stop_buffer,
             target_lookback=target_lookback,
             min_rr=min_rr,
-            require_ma5_positive=require_ma5_positive,
-            ma5_min_slope=ma5_min_slope_pct / 100.0,  # % -> ratio
+            require_ma5_positive=False,
+            ma5_min_slope=0.0,
         )
 
-        out["run_scan"] = st.sidebar.button("Run Scan", type="primary", key="run_scan_btn")
-
     elif tab == "Browse":
-        st.sidebar.subheader("Browse Top200")
+        st.sidebar.subheader("Browse")
+
+        market, top_n = _market_and_topn_controls(prefix="browse_")
+        out["market"] = market
+        out["top_n"] = top_n
 
     return out
