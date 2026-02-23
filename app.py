@@ -1,77 +1,104 @@
+# app.py
 import streamlit as st
 import json
 import hashlib
+import pandas as pd
 
 from core.config import APP_TITLE
-from core.data_loader import list_csv_files, load_data, get_ticker_name_map
+from core.data_loader import load_all_markets, daily_fingerprint
+from core.universe import build_universe
+from core.ticker_names import load_ticker_name_map
+
 from core.market_index import load_kospi_index_1y
 from core.market_filter import kospi_market_ok
 from core.strategies import get_strategies
 
 from ui.sidebar import render_sidebar
 from ui.scanner_view import render_scanner_results
-from ui.chart_view import render_search_and_select, render_naver_link, render_chart_and_sizing_two_column
-from ui.data_view import render_data_tab
+from ui.chart_view import (
+    render_search_and_select,
+    render_naver_link,
+    render_chart_and_sizing_two_column,
+)
 
-from core.data_loader import load_data, get_active_csv_path
-
+# -----------------------------
+# Page config MUST be first st-call
+# -----------------------------
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
 
+
+# -----------------------------
+# Data buffers (daily -> parquet cache)
+# -----------------------------
+@st.cache_data(show_spinner=True)
+def load_buffers(_fingerprint: str):
+    dfs, infos = load_all_markets()
+    return dfs, infos
+
+
+# Optional: manual refresh button
+if st.sidebar.button("🔄 Refresh data", help="Clear cache and reload parquet buffers"):
+    st.cache_data.clear()
+    st.rerun()
+
+fp = daily_fingerprint()
+dfs, infos = load_buffers(fp)
+
+# -----------------------------
+# Strategies
+# -----------------------------
 strategies = get_strategies()
 strategy_by_label = {s.name: s for s in strategies}
 strategy_labels = list(strategy_by_label.keys())
 
-csv_files = list_csv_files()
-csv_labels = [p.name for p in csv_files]
+# -----------------------------
+# Sidebar
+# -----------------------------
+sb = render_sidebar(strategy_labels=strategy_labels)
 
-sb = render_sidebar(
-    strategy_labels=strategy_labels,
-    csv_options=csv_labels,
-)
+tab = sb.get("tab", "Scanner")
 
-selected_csv_path = None
+# -----------------------------
+# Pick market universe (KOSPI/KOSDAQ + TopN)
+# -----------------------------
+market = sb.get("market", "KOSPI")          # fallback if sidebar not updated yet
+top_n = sb.get("top_n", None)              # None = 전체
+df, uni = build_universe(dfs, market=market, top_n=top_n, rank_by="market_cap")
 
-# =========================
-# DATA TAB (main view)
-# =========================
-tab = sb["tab"]  # 너의 sidebar 리턴값 기준
-
-if tab == "Data":
-    render_data_tab()  # active만 바꿈 (return 불필요)
-else:
-    active_path = get_active_csv_path()
-    if not active_path:
-        st.warning("No active CSV. Go to Data tab and select a dataset.")
-        st.stop()
-
-    df = load_data(str(active_path))
-    # 이후 Scanner/Browse 로직 진행
-
-# =========================
-# Load active CSV for Scanner/Browse
-# =========================
-csv_files = list_csv_files()
-if not csv_files:
-    st.warning("No CSV found.")
+if df is None or df.empty:
+    st.warning("No data loaded. Check daily downloader output and parquet cache.")
     st.stop()
 
-if selected_csv_path is None:
-    active_name = st.session_state.get("selected_csv_name")
-    selected_csv_path = next((p for p in csv_files if p.name == active_name), csv_files[0])
+# Name map (cached daily on disk)
+name_map = load_ticker_name_map(market)
 
-df = load_data(str(selected_csv_path))
+# Common ticker list for search UI
+tickers = sorted(df["ticker"].astype(str).unique())
 
-tickers = sorted(df["ticker"].unique())
-name_map = get_ticker_name_map(tickers)
+if not tickers:
+    st.warning("No tickers found in the selected universe.")
+    st.stop()
 
-# 상태 분리
+
+# -----------------------------
+# Session state defaults
+# -----------------------------
 if "selected_scan_ticker" not in st.session_state:
     st.session_state["selected_scan_ticker"] = None
 if "selected_browse_ticker" not in st.session_state:
     st.session_state["selected_browse_ticker"] = tickers[0]
+if "scan_sig" not in st.session_state:
+    st.session_state["scan_sig"] = None
 
-def _scan_signature(csv_name: str, strategy_label: str, market_mode: str, params) -> str:
+
+def _scan_signature(
+    strategy_label: str,
+    market_mode: str,
+    market: str,
+    top_n,
+    params,
+) -> str:
     # params가 dataclass면 asdict, 아니면 dict/객체에 맞게 변환
     if hasattr(params, "__dict__"):
         params_obj = params.__dict__
@@ -79,34 +106,49 @@ def _scan_signature(csv_name: str, strategy_label: str, market_mode: str, params
         params_obj = dict(params)
 
     payload = {
-        "csv": csv_name,
         "strategy": strategy_label,
         "market_mode": market_mode,
+        "market": market,
+        "top_n": top_n,
         "params": params_obj,
+        "latest_date": uni.latest_date,
     }
     s = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.md5(s.encode("utf-8")).hexdigest()
 
-# =========================
-# SCANNER TAB
-# =========================
-if sb["tab"] == "Scanner":
-    # 현재 설정
-    csv_name = st.session_state.get("selected_csv_name", selected_csv_path.name)
-    strategy_label = sb["selected_strategy_label"]
-    market_mode = sb["market_mode"]
-    params = sb["params"]
 
-    active_name = st.session_state.get("selected_csv_name", "(none)")
-    st.caption(f"Dataset: **{active_name}**")
+# -----------------------------
+# Top header info (lightweight)
+# -----------------------------
+st.caption(
+    f"Universe: **{uni.market}** | Latest: **{uni.latest_date}** | "
+    f"Tickers: **{uni.tickers:,}** | Rows: **{uni.rows:,}** | "
+    f"TopN: **{uni.top_n if uni.top_n else 'ALL'}** (by {uni.rank_by})"
+)
 
-    sig = _scan_signature(csv_name, strategy_label, market_mode, params)
+
+# -----------------------------
+# Tabs behavior
+# -----------------------------
+if tab == "Scanner":
+    strategy_label = sb.get("selected_strategy_label", strategy_labels[0] if strategy_labels else "")
+    market_mode = sb.get("market_mode", "close_above_ma20")
+    params = sb.get("params", None)
+
+    if not strategy_label:
+        st.warning("No strategy available.")
+        st.stop()
+
+    st.caption(f"Strategy: **{strategy_label}** | KOSPI Filter: **{market_mode}**")
+
+    # 설정이 바뀐 경우에만 재스캔
+    sig = _scan_signature(strategy_label, market_mode, market, top_n, params)
     last_sig = st.session_state.get("scan_sig")
 
-    # ✅ 바뀐 경우에만 재스캔
     if sig != last_sig:
         st.session_state["scan_sig"] = sig
 
+        # 시장 필터: 기존 로직 유지 (KOSPI index 기반)
         idx_df = load_kospi_index_1y()
         ok, msg = kospi_market_ok(idx_df, mode=market_mode)
         st.session_state["market_ok"] = ok
@@ -117,17 +159,18 @@ if sb["tab"] == "Scanner":
             scan_df = strategy.scan(df, params)
             st.session_state["scan_df"] = scan_df
             st.session_state["scan_levels"] = (
-                scan_df.set_index("ticker")[["entry", "stop", "target", "rr"]].to_dict(orient="index")
-                if not scan_df.empty else {}
+                scan_df.set_index("ticker")[["entry", "stop", "target", "rr"]]
+                .to_dict(orient="index")
+                if scan_df is not None and not scan_df.empty
+                else {}
             )
         else:
             st.session_state["scan_df"] = None
             st.session_state["scan_levels"] = {}
 
-    # 이후 렌더는 저장된 결과 사용
-    scan_df = st.session_state.get("scan_df", None)
     market_msg = st.session_state.get("market_msg", "")
     market_ok = st.session_state.get("market_ok", True)
+    scan_df = st.session_state.get("scan_df", None)
 
     if market_msg:
         st.write(f"Market filter: **{market_msg}**")
@@ -138,28 +181,30 @@ if sb["tab"] == "Scanner":
         else:
             pick = render_scanner_results(scan_df, name_map)
             if pick:
-                st.session_state["selected_ticker"] = pick
+                st.session_state["selected_scan_ticker"] = pick
 
-# =========================
-# BROWSE TAB
-# =========================
-elif sb["tab"] == "Browse":
-    active_name = st.session_state.get("selected_csv_name", "(none)")
-    st.caption(f"Dataset: **{active_name}**")
+elif tab == "Browse":
+    # Browse: 검색/선택 UI
     _ = render_search_and_select(
         tickers,
         name_map,
         state_key="selected_browse_ticker",
-        title="Browse KOSPI Top200",
-    )    
+        title=f"Browse ({uni.market})",
+    )
 
-# =========================
+else:
+    # Data 탭은 당장 “나중에 고민”이었으니, 일단 안내만.
+    st.info("Data tab is deprecated in the new pipeline. Use daily downloader + parquet buffers.")
+    st.stop()
+
+
+# -----------------------------
 # Common chart area
-# =========================
-if sb["tab"] == "Scanner":
+# -----------------------------
+if tab == "Scanner":
     selected = st.session_state.get("selected_scan_ticker")
     scan_levels = st.session_state.get("scan_levels", None)
-elif sb["tab"] == "Browse":
+elif tab == "Browse":
     selected = st.session_state.get("selected_browse_ticker")
     scan_levels = None
 else:
@@ -167,12 +212,21 @@ else:
     scan_levels = None
 
 if selected:
+    selected = str(selected).zfill(6)
     selected_name = name_map.get(selected, selected)
     st.subheader(f"{selected} - {selected_name}")
     render_naver_link(selected)
 
-    sub = df[df["ticker"] == selected].sort_values("date").copy()
-    prefix = "ps_scan" if sb["tab"] == "Scanner" else "ps_browse"
+    
+    sub = df[df["ticker"].astype(str).str.zfill(6) == selected].copy()
+
+    # ✅ date 강제 정규화
+    sub["date"] = pd.to_datetime(sub["date"], errors="coerce")
+    sub = sub.dropna(subset=["date"])
+
+    sub = sub.sort_values("date")
+
+    prefix = "ps_scan" if tab == "Scanner" else "ps_browse"
 
     render_chart_and_sizing_two_column(
         selected=selected,

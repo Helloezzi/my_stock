@@ -2,6 +2,7 @@
 import pandas as pd
 from .base import Strategy, ScanParams
 
+fail = {"len<120":0, "na":0, "uptrend":0, "momentum":0, "near_ma20":0, "vol":0, "risk_reward":0, "min_rr":0}
 
 def _clamp01(x: float) -> float:
     return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
@@ -21,46 +22,61 @@ class PullbackRRStrategy(Strategy):
 
     def scan(self, df: pd.DataFrame, params: ScanParams) -> pd.DataFrame:
         results = []
+        fail = {
+            "len<120": 0,
+            "na": 0,
+            "uptrend": 0,
+            "momentum": 0,
+            "near_ma20": 0,
+            "vol": 0,
+            "risk_reward": 0,
+            "min_rr": 0,
+        }
 
         for t, g in df.groupby("ticker"):
             g = g.sort_values("date").copy()
             if len(g) < 120:
+                fail["len<120"] += 1
                 continue
 
-            # Core indicators
             g["ma5"] = g["close"].rolling(5).mean()
             g["ma20"] = g["close"].rolling(20).mean()
             g["ma60"] = g["close"].rolling(60).mean()
             g["vol_ma20"] = g["volume"].rolling(20).mean()
-
-            # Extra indicators for scoring
             g["std20"] = g["close"].pct_change().rolling(20).std()
             g["ret20"] = g["close"].pct_change(20)
 
             last = g.iloc[-1]
             if pd.isna(last["ma20"]) or pd.isna(last["ma60"]) or pd.isna(last["vol_ma20"]):
+                fail["na"] += 1
                 continue
 
-            # --- Base setup filters (기존 유지) ---
             uptrend = last["ma20"] > last["ma60"]
+            if not uptrend:
+                fail["uptrend"] += 1
+                continue
 
             high20 = g["high"].rolling(20).max().iloc[-1]
             high60 = g["high"].rolling(60).max().iloc[-1]
             had_momentum = (
-                (not pd.isna(high20)) and
-                (not pd.isna(high60)) and
-                (high20 >= high60 * 0.98)
+                (not pd.isna(high20)) and (not pd.isna(high60)) and (high20 >= high60 * 0.95)
             )
-
-            near_ma20 = abs(last["close"] - last["ma20"]) / last["ma20"] <= params.tolerance
-
-            vol_5 = g["volume"].tail(5).mean()
-            vol_cooling = vol_5 < last["vol_ma20"]
-
-            if not (uptrend and had_momentum and near_ma20 and vol_cooling):
+            if not had_momentum:
+                fail["momentum"] += 1
                 continue
 
-            # --- Entry/Stop/Target ---
+            near_ma20 = abs(last["close"] - last["ma20"]) / last["ma20"] <= params.tolerance
+            if not near_ma20:
+                fail["near_ma20"] += 1
+                continue
+
+            vol_5 = g["volume"].tail(5).mean()
+            vol_ma20 = float(last["vol_ma20"]) if not pd.isna(last["vol_ma20"]) else 0.0
+            vol_ok = (vol_ma20 > 0) and (vol_5 <= vol_ma20 * 1.5)
+            if not vol_ok:
+                fail["vol"] += 1
+                continue
+
             entry = float(last["close"])
             recent_low = float(g["low"].tail(params.stop_lookback).min())
             stop = recent_low * (1.0 - params.stop_buffer)
@@ -69,11 +85,13 @@ class PullbackRRStrategy(Strategy):
             risk = entry - stop
             reward = target - entry
             if risk <= 0 or reward <= 0:
+                fail["risk_reward"] += 1
                 continue
 
             rr = reward / risk
             if rr < params.min_rr:
-                continue
+                fail["min_rr"] += 1
+                continue            
 
             # MA5 slope (short-term momentum)
             ma5_now = float(last["ma5"]) if not pd.isna(last.get("ma5")) else None
@@ -138,7 +156,7 @@ class PullbackRRStrategy(Strategy):
 
             results.append({
                 "ticker": t,
-                "date": last["date"].date(),
+                "date": last["date"],
                 "entry": entry,
                 "stop": stop,
                 "target": target,
@@ -168,6 +186,8 @@ class PullbackRRStrategy(Strategy):
                 "score": float(score),
             })
 
+        print("[PullbackRR fail stats]", fail)
+
         if not results:
             return pd.DataFrame(columns=[
                 "ticker","date","entry","stop","target","risk","reward","rr",
@@ -192,4 +212,5 @@ class PullbackRRStrategy(Strategy):
         )
         out["score"] = (100.0 * total01).astype(float)
 
-        return out.sort_values("score", ascending=False).reset_index(drop=True)
+        return out.sort_values("score", ascending=False).reset_index(drop=True)    
+    

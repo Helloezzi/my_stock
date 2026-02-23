@@ -32,7 +32,9 @@ def _calc_date_range(end_date: str | None, lookback: str) -> tuple[str, str]:
     else:
         end = datetime.strptime(end_date, "%Y%m%d").date()
 
-    if lookback == "6mo":
+    if  lookback == "1d":
+        start = end - timedelta(days=1)
+    elif lookback == "6mo":
         start = end - relativedelta(months=6)
     elif lookback == "2y":
         start = end - relativedelta(years=2)
