@@ -12,6 +12,8 @@ from typing import Dict, Iterable, Optional
 import pandas as pd
 from pykrx import stock
 
+REPO_ROOT = Path(__file__).resolve().parents[1]  # .../my_stock
+DEFAULT_OUT_DIR = REPO_ROOT / "data" / "daily"
 
 @dataclass(frozen=True)
 class DownloadResult:
@@ -69,6 +71,7 @@ def _normalize_columns(df: pd.DataFrame, yyyymmdd: str) -> pd.DataFrame:
     out = df.copy()
 
     rename_map = {
+        # Korean
         "시가": "open",
         "고가": "high",
         "저가": "low",
@@ -77,7 +80,22 @@ def _normalize_columns(df: pd.DataFrame, yyyymmdd: str) -> pd.DataFrame:
         "거래대금": "value",
         "시가총액": "market_cap",
         "상장주식수": "shares",
+
+        # English (variants)
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume",
+        "Value": "value",
+        "Market Cap": "market_cap",
+        "Shares": "shares",
+        "OPEN": "open",
+        "HIGH": "high",
+        "LOW": "low",
+        "CLOSE": "close",
     }
+
     out = out.rename(columns={k: v for k, v in rename_map.items() if k in out.columns})
 
     # ticker index -> column
@@ -88,18 +106,7 @@ def _normalize_columns(df: pd.DataFrame, yyyymmdd: str) -> pd.DataFrame:
     out["ticker"] = out["ticker"].astype(str).str.zfill(6)
     out.insert(0, "date", yyyymmdd)
 
-    preferred = [
-        "date",
-        "ticker",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "value",
-        "market_cap",
-        "shares",
-    ]
+    preferred = ["date","ticker","open","high","low","close","volume","value","market_cap","shares"]
     cols = [c for c in preferred if c in out.columns] + [c for c in out.columns if c not in preferred]
     return out[cols]
 
@@ -107,7 +114,7 @@ def _normalize_columns(df: pd.DataFrame, yyyymmdd: str) -> pd.DataFrame:
 def download_daily_one_market(
     yyyymmdd: str | date | None = None,
     market: str = "KOSPI",
-    out_dir: str | Path = "data/daily",
+    out_dir: str | Path = DEFAULT_OUT_DIR,
     force: bool = False,
     min_rows: int = 50,
 ) -> DownloadResult:
@@ -189,7 +196,7 @@ def _cli() -> int:
     p = argparse.ArgumentParser(description="Download daily KRX OHLCV (KOSPI/KOSDAQ) and save CSV per market")
     p.add_argument("--date", default=None, help="Target date (YYYYMMDD or YYYY-MM-DD). Default: today.")
     p.add_argument("--market", default="ALL", help="KOSPI, KOSDAQ, or ALL")
-    p.add_argument("--out-dir", default="data/daily", help="Base output directory")
+    p.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR), help="Base output directory")
     p.add_argument("--force", action="store_true", help="Overwrite existing csv")
     args = p.parse_args()
 
