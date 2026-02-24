@@ -3,6 +3,7 @@ import streamlit as st
 import json
 import hashlib
 import pandas as pd
+from datetime import datetime, time as dtime
 
 from core.config import APP_TITLE
 from core.data_loader import load_all_markets, daily_fingerprint
@@ -21,12 +22,18 @@ from ui.chart_view import (
     render_chart_and_sizing_two_column,
 )
 
+from core.auto_daily import try_run_daily_once_async
+
 # -----------------------------
 # Page config MUST be first st-call
 # -----------------------------
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
 
+# 서버 뜰 때마다 시도하지만, 하루 1회만 실제 실행됨
+now = datetime.now().time()
+if now >= dtime(16, 20):
+    try_run_daily_once_async()
 
 # -----------------------------
 # Data buffers (daily -> parquet cache)
