@@ -80,14 +80,17 @@ def render_sidebar(strategy_labels):
         target_lookback = st.sidebar.slider("Target lookback (days)", 10, 90, 20)
         min_rr = st.sidebar.slider("Min R/R", 0.5, 5.0, 1.5, 0.1)
 
+        require_ma5_positive = st.sidebar.checkbox("Require MA5 slope positive", value=False)
+        ma5_min_slope = st.sidebar.number_input("MA5 min slope (3d)", value=0.0, step=0.001, format="%.3f")
+
         out["params"] = ScanParams(
             tolerance=tolerance,
             stop_lookback=stop_lookback,
             stop_buffer=stop_buffer,
             target_lookback=target_lookback,
             min_rr=min_rr,
-            require_ma5_positive=False,
-            ma5_min_slope=0.0,
+            require_ma5_positive=require_ma5_positive,
+            ma5_min_slope=ma5_min_slope,
         )
 
     elif tab == "Browse":
