@@ -2,81 +2,62 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
+import streamlit as st
 from pykrx import stock
+from core.config import DATA_DIR
+
+NAME_CACHE_PATH = DATA_DIR / "ticker_name_map.json"
 
 
-CACHE_DIR = Path("data/cache")
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+def _load_cache() -> Dict[str, str]:
+    if not NAME_CACHE_PATH.exists():
+        return {}
+    try:
+        return json.loads(NAME_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
-def _today_str() -> str:
-    return datetime.now().strftime("%Y%m%d")
+def _save_cache(cache: Dict[str, str]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    NAME_CACHE_PATH.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
-def _cache_path(market: str) -> Path:
-    market = market.lower()
-    return CACHE_DIR / f"ticker_names_{market}.json"
+@st.cache_data(show_spinner=False)
+def get_ticker_name_map(tickers: list[str]) -> dict[str, str]:
+    tickers = [str(t).zfill(6) for t in tickers]
+    cache = _load_cache()
 
+    # ✅ 없거나, 값이 티커 그대로면(과거 실패로 박제된 케이스) 다시 조회 대상으로 간주
+    missing = [t for t in tickers if (t not in cache) or (cache.get(t) == t)]
 
-def _download_name_map(market: str) -> Dict[str, str]:
-    """
-    Download ticker name map for given market using pykrx.
-    """
-    market = market.upper()
-    today = _today_str()
+    if missing:
+        for t in missing:
+            try:
+                nm = stock.get_market_ticker_name(t)
+                if nm:
+                    cache[t] = nm
+                else:
+                    # nm이 비면 저장하지 말고 다음에 재시도 여지 남김
+                    cache.pop(t, None)
+            except Exception:
+                # 실패 저장 금지(박제 방지)
+                cache.pop(t, None)
 
-    tickers = stock.get_market_ticker_list(today, market=market)
+        _save_cache(cache)
 
-    name_map = {}
-    for t in tickers:
-        try:
-            name = stock.get_market_ticker_name(t)
-            name_map[str(t).zfill(6)] = name
-        except Exception:
-            name_map[str(t).zfill(6)] = str(t).zfill(6)
+    return {t: cache.get(t, t) for t in tickers}
 
-    return name_map
-
-
-def load_ticker_name_map(market: str, force_refresh: bool = False) -> Dict[str, str]:
-    """
-    Load ticker name map with daily cache.
-    """
-    market = market.upper()
-    cache_file = _cache_path(market)
-
-    if cache_file.exists() and not force_refresh:
-        try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-            if payload.get("date") == _today_str():
-                return payload["data"]
-        except Exception:
-            pass
-
-    # refresh
-    name_map = _download_name_map(market)
-
-    payload = {
-        "date": _today_str(),
-        "data": name_map,
-    }
-
-    with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False)
-
-    return name_map
-
-
-def load_all_name_maps(force_refresh: bool = False) -> Dict[str, Dict[str, str]]:
-    """
-    Return {"KOSPI": {...}, "KOSDAQ": {...}}
-    """
-    return {
-        "KOSPI": load_ticker_name_map("KOSPI", force_refresh=force_refresh),
-        "KOSDAQ": load_ticker_name_map("KOSDAQ", force_refresh=force_refresh),
-    }
+def clear_name_cache() -> None:
+    """원하면 UI 버튼에 연결해서 캐시 초기화 가능."""
+    try:
+        NAME_CACHE_PATH.unlink(missing_ok=True)
+    except Exception:
+        pass
+    st.cache_data.clear()

@@ -8,9 +8,61 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-
+from core.config import DATA_DIR
+import streamlit as st
 
 DATE_RE = re.compile(r"krx_ohlcv_(\d{8})\.csv$", re.IGNORECASE)
+
+ACTIVE_KEY = "selected_csv_name"
+
+def get_active_csv_path() -> Path | None:
+    name = st.session_state.get(ACTIVE_KEY)
+    if not name:
+        return None
+
+    # ✅ parquet 우선
+    p_parquet = DATA_DIR / name.replace(".csv", ".parquet")
+    if p_parquet.exists():
+        return p_parquet
+
+    # csv fallback
+    p_csv = DATA_DIR / name
+    return p_csv if p_csv.exists() else None
+
+
+def list_dataset_files() -> List[Path]:
+    """
+    data 폴더 내 데이터셋 나열
+    - parquet가 있으면 parquet 기준으로 보여주고
+    - parquet 없는 csv도 보여줌
+    - _tmp_ 제외
+    """
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    parquet_files = sorted(DATA_DIR.glob("*.parquet"), key=lambda p: p.stat().st_mtime, reverse=True)
+    csv_files = sorted(DATA_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    csv_files = [p for p in csv_files if not p.name.startswith("_tmp_")]
+
+    # parquet가 존재하는 csv는 중복 제거
+    parquet_stems = {p.stem for p in parquet_files}
+    csv_files = [p for p in csv_files if p.stem not in parquet_stems]
+
+    return parquet_files + csv_files
+
+
+@st.cache_data(show_spinner=False)
+def load_data(path: str) -> pd.DataFrame:
+    p = Path(path)
+    if p.suffix.lower() == ".parquet":
+        df = pd.read_parquet(p)
+    else:
+        df = pd.read_csv(p)
+
+    if "ticker" in df.columns:
+        df["ticker"] = df["ticker"].astype(str).str.zfill(6)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 @dataclass(frozen=True)
@@ -163,15 +215,14 @@ def update_parquet_cache_for_market(
 
     # Remove non-trading/invalid rows (close==0 etc.)
     price_cols = [c for c in ["open", "high", "low", "close"] if c in merged.columns]
-    if "close" in merged.columns:
-        merged = merged[merged["close"] > 0].copy()
 
     # (optional) volume==0도 제거하고 싶으면 아래 추가
     # if "volume" in merged.columns:
     #     merged = merged[merged["volume"] > 0].copy()
 
     # Persist cache (overwrite)
-    merged.to_parquet(cache_path, index=False)
+    if new_files:
+        merged.to_parquet(cache_path, index=False)
 
     # after date/ticker normalization
     if "close" in merged.columns:

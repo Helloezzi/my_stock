@@ -176,12 +176,25 @@ def render_position_sizing(selected, sub, scan_levels, key_prefix: str = "ps"):
 
 
 def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
-    sub = sub.copy()
+    
+    if sub is None or len(sub) == 0:
+        st.warning("No data to render chart.")
+        return
+
+    if "x" not in sub.columns:
+        sub = sub.copy()
+        sub["x"] = range(len(sub))
+
+    if sub["x"].isna().all() or len(sub["x"]) == 0:
+        st.warning("Chart x-axis is empty.")
+        return
+    
     sub["date"] = pd.to_datetime(sub["date"], errors="coerce")
     sub = sub.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
 
     # ✅ trading-day index axis
-    sub["x"] = sub.index.astype(int)
+    sub["x"] = sub.index.astype(int)    
+    
     x0 = int(sub["x"].iloc[0])
     x1 = int(sub["x"].iloc[-1])
     x1_pad = x1 + 5  # ✅ 봉 기준 패딩(원하면 10)

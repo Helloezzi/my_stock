@@ -8,7 +8,7 @@ from datetime import datetime, time as dtime
 from core.config import APP_TITLE
 from core.data_loader import load_all_markets, daily_fingerprint
 from core.universe import build_universe
-from core.ticker_names import load_ticker_name_map
+from core.ticker_names import get_ticker_name_map
 
 from core.market_index import load_kospi_index_1y
 from core.market_filter import kospi_market_ok
@@ -23,6 +23,10 @@ from ui.chart_view import (
 )
 
 from core.auto_daily import try_run_daily_once_async
+from core.scan_cache import (
+    scan_signature, load_cached_scan, save_cached_scan,
+    load_cached_levels, save_cached_levels
+)
 
 # -----------------------------
 # Page config MUST be first st-call
@@ -77,16 +81,12 @@ if df is None or df.empty:
     st.warning("No data loaded. Check daily downloader output and parquet cache.")
     st.stop()
 
-# Name map (cached daily on disk)
-name_map = load_ticker_name_map(market)
-
-# Common ticker list for search UI
-tickers = sorted(df["ticker"].astype(str).unique())
+tickers = sorted(df["ticker"].astype(str).str.zfill(6).unique())
+name_map = get_ticker_name_map(tickers)
 
 if not tickers:
     st.warning("No tickers found in the selected universe.")
     st.stop()
-
 
 # -----------------------------
 # Session state defaults
@@ -97,32 +97,6 @@ if "selected_browse_ticker" not in st.session_state:
     st.session_state["selected_browse_ticker"] = tickers[0]
 if "scan_sig" not in st.session_state:
     st.session_state["scan_sig"] = None
-
-
-def _scan_signature(
-    strategy_label: str,
-    market_mode: str,
-    market: str,
-    top_n,
-    params,
-) -> str:
-    # params가 dataclass면 asdict, 아니면 dict/객체에 맞게 변환
-    if hasattr(params, "__dict__"):
-        params_obj = params.__dict__
-    else:
-        params_obj = dict(params)
-
-    payload = {
-        "strategy": strategy_label,
-        "market_mode": market_mode,
-        "market": market,
-        "top_n": top_n,
-        "params": params_obj,
-        "latest_date": uni.latest_date,
-    }
-    s = json.dumps(payload, sort_keys=True, default=str)
-    return hashlib.md5(s.encode("utf-8")).hexdigest()
-
 
 # -----------------------------
 # Top header info (lightweight)
@@ -149,11 +123,24 @@ if tab == "Scanner":
     st.caption(f"Strategy: **{strategy_label}** | KOSPI Filter: **{market_mode}**")
 
     # 설정이 바뀐 경우에만 재스캔
-    sig = _scan_signature(strategy_label, market_mode, market, top_n, params)
+    sig = scan_signature(
+        latest_date=str(uni.latest_date),
+        market=market,
+        top_n=top_n,
+        strategy_label=strategy_label,
+        market_mode=market_mode,
+        params=params,
+    )
     last_sig = st.session_state.get("scan_sig")
 
     if sig != last_sig:
         st.session_state["scan_sig"] = sig
+        st.session_state["selected_scan_ticker"] = None
+
+        cur_set = set(tickers)
+        sel = st.session_state.get("selected_scan_ticker")
+        if sel and str(sel).zfill(6) not in cur_set:
+            st.session_state["selected_scan_ticker"] = None
 
         # 시장 필터: 기존 로직 유지 (KOSPI index 기반)
         idx_df = load_kospi_index_1y()
@@ -162,15 +149,29 @@ if tab == "Scanner":
         st.session_state["market_msg"] = msg
 
         if ok:
-            strategy = strategy_by_label[strategy_label]
-            scan_df = strategy.scan(df, params)
+            cached = load_cached_scan(sig)
+            cached_levels = load_cached_levels(sig)
+
+            if cached is not None and cached_levels is not None:
+                scan_df = cached
+                levels = cached_levels
+            else:
+                strategy = strategy_by_label[strategy_label]
+                scan_df = cached if cached is not None else strategy.scan(df, params)
+
+                # levels 생성
+                if not scan_df.empty and "ticker" in scan_df.columns:
+                    need = [c for c in ["entry", "stop", "target", "rr"] if c in scan_df.columns]
+                    levels = scan_df.set_index("ticker")[need].to_dict("index") if need else {}
+                else:
+                    levels = {}
+
+                # 저장
+                save_cached_scan(sig, scan_df)
+                save_cached_levels(sig, levels)
+
             st.session_state["scan_df"] = scan_df
-            st.session_state["scan_levels"] = (
-                scan_df.set_index("ticker")[["entry", "stop", "target", "rr"]]
-                .to_dict(orient="index")
-                if scan_df is not None and not scan_df.empty
-                else {}
-            )
+            st.session_state["scan_levels"] = levels
         else:
             st.session_state["scan_df"] = None
             st.session_state["scan_levels"] = {}
@@ -223,15 +224,18 @@ if selected:
     selected_name = name_map.get(selected, selected)
     st.subheader(f"{selected} - {selected_name}")
     render_naver_link(selected)
-
     
     sub = df[df["ticker"].astype(str).str.zfill(6) == selected].copy()
-
-    # ✅ date 강제 정규화
+    #st.write("rows before date parse:", len(sub))
     sub["date"] = pd.to_datetime(sub["date"], errors="coerce")
+    #st.write("rows after date parse:", sub["date"].notna().sum())
     sub = sub.dropna(subset=["date"])
 
     sub = sub.sort_values("date")
+
+    if sub.empty:
+        st.warning("No OHLCV rows for selected ticker (after date normalization).")
+        st.stop()
 
     prefix = "ps_scan" if tab == "Scanner" else "ps_browse"
 
