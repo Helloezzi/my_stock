@@ -113,8 +113,8 @@ def _ensure_dirs(*paths: Path) -> None:
 
 def update_parquet_cache_for_market(
     market: str,
-    daily_base_dir: str | Path = "data/daily",
-    cache_base_dir: str | Path = "data/cache",
+    daily_base_dir: str | Path = DATA_DIR / "daily",
+    cache_base_dir: str | Path = DATA_DIR / "cache",
 ) -> Tuple[pd.DataFrame, CacheUpdateResult]:
     """
     Build/Update parquet cache for one market from daily CSV files.
@@ -271,8 +271,8 @@ def update_parquet_cache_for_market(
 
 def load_market_data(
     market: str,
-    daily_base_dir: str | Path = "data/daily",
-    cache_base_dir: str | Path = "data/cache",
+    daily_base_dir: str | Path = DATA_DIR / "daily",
+    cache_base_dir: str | Path = DATA_DIR / "cache",
 ) -> Tuple[pd.DataFrame, CacheUpdateResult]:
     """Public entry: update cache if needed and return DF."""
     return update_parquet_cache_for_market(
@@ -283,8 +283,8 @@ def load_market_data(
 
 
 def load_all_markets(
-    daily_base_dir: str | Path = "data/daily",
-    cache_base_dir: str | Path = "data/cache",
+    daily_base_dir: str | Path = DATA_DIR / "daily",
+    cache_base_dir: str | Path = DATA_DIR / "cache",
 ) -> Tuple[Dict[str, pd.DataFrame], Dict[str, CacheUpdateResult]]:
     dfs: Dict[str, pd.DataFrame] = {}
     infos: Dict[str, CacheUpdateResult] = {}
@@ -295,7 +295,7 @@ def load_all_markets(
     return dfs, infos
 
 
-def daily_fingerprint(daily_base_dir: str | Path = "data/daily") -> str:
+def daily_fingerprint(daily_base_dir: str | Path = DATA_DIR / "daily") -> str:
     """
     Return a stable fingerprint for daily CSV directories.
     If any new daily csv appears or files change, fingerprint changes.
