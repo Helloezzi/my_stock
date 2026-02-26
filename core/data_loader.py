@@ -132,6 +132,35 @@ def update_parquet_cache_for_market(
 
     daily_files = _list_daily_csvs(daily_dir)
     if not daily_files:
+        # ✅ daily가 없어도 cache가 있으면 cache를 그대로 사용
+        if cache_path.exists():
+            cached = pd.read_parquet(cache_path)
+
+            # 타입 정규화 (기존 로직 재사용)
+            if "ticker" in cached.columns:
+                cached["ticker"] = cached["ticker"].astype("string").str.zfill(6)
+            if "date" in cached.columns:
+                cached["date"] = pd.to_datetime(cached["date"], errors="coerce")
+                cached = cached.dropna(subset=["date"])
+
+            # close>0 필터 (있으면)
+            if "close" in cached.columns:
+                cached = cached[cached["close"] > 0].copy()
+
+            cached = cached.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+            return cached, CacheUpdateResult(
+                market=market,
+                cache_path=cache_path,
+                existing_rows=int(len(cached)),
+                added_files=0,
+                added_rows=0,
+                total_rows=int(len(cached)),
+                ok=True,
+                message=f"loaded existing cache (daily empty): {cache_path.name}",
+            )
+
+        # cache도 없으면 진짜로 empty
         empty = pd.DataFrame()
         return empty, CacheUpdateResult(
             market=market,
@@ -141,7 +170,7 @@ def update_parquet_cache_for_market(
             added_rows=0,
             total_rows=0,
             ok=False,
-            message=f"no daily files in {daily_dir}",
+            message=f"no daily files in {daily_dir} and no cache parquet",
         )
 
     # Load existing cache if present
