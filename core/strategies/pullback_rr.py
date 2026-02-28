@@ -1,20 +1,21 @@
 # core/strategies/pullback_rr.py
-import pandas as pd
-from .base import Strategy, ScanParams
 import numpy as np
+import pandas as pd
 
-fail = {"len<120":0, "na":0, "uptrend":0, "momentum":0, "near_ma20":0, "vol":0, "risk_reward":0, "min_rr":0}
+from .base import Strategy, ScanParams
+
 
 def _clamp01(x: float) -> float:
     return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
 
 
-def _rr_preference_score(rr: float, center: float = 2.15, half_width: float = 1.35) -> float:
-    """
-    0..1 score peaking near center.
-    기본값(center=2.15)은 RR 1.8~2.5 구간을 가장 선호하도록 설계.
-    """
-    return _clamp01(1.0 - abs(rr - center) / half_width)
+def _clamp01_series(s: pd.Series) -> pd.Series:
+    return s.clip(lower=0.0, upper=1.0)
+
+
+def _rr_preference_score_series(rr: pd.Series, center: float = 2.15, half_width: float = 1.35) -> pd.Series:
+    # 0..1 score peaking near center
+    return _clamp01_series(1.0 - (rr - center).abs() / half_width)
 
 
 class PullbackRRStrategy(Strategy):
@@ -42,28 +43,31 @@ class PullbackRRStrategy(Strategy):
             "vol": 0,
             "risk_reward": 0,
             "min_rr": 0,
-            "ma5_slope": 0,
+            "ma5_up_days": 0,
         }
+
+        out_empty = pd.DataFrame(columns=[
+            "ticker", "date", "entry", "stop", "target", "risk", "reward", "rr",
+            "ma5", "ma5_slope_3d", "ma5_slope_score",
+            "ma20", "ma60", "ma20_slope_5d", "ret20", "bb_width", "vol_ratio_5v20",
+            "rr_pref", "trend_score", "vol_score", "vol_score2", "rs_score", "score",
+        ])
 
         if g.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         close_g = g.groupby("ticker")["close"]
-        vol_g   = g.groupby("ticker")["volume"]
-        high_g  = g.groupby("ticker")["high"]
-        low_g   = g.groupby("ticker")["low"]
+        vol_g = g.groupby("ticker")["volume"]
+        high_g = g.groupby("ticker")["high"]
+        low_g = g.groupby("ticker")["low"]
 
         # ---- rolling 지표 (벡터화) ----
         g["ma5"] = close_g.transform(lambda s: s.rolling(5).mean())
         g["ma20"] = close_g.transform(lambda s: s.rolling(20).mean())
         g["ma60"] = close_g.transform(lambda s: s.rolling(60).mean())
         g["vol_ma20"] = vol_g.transform(lambda s: s.rolling(20).mean())
+
         g["std20"] = close_g.transform(lambda s: s.pct_change().rolling(20).std())
         g["ret20"] = close_g.transform(lambda s: s.pct_change(20))
 
@@ -74,26 +78,39 @@ class PullbackRRStrategy(Strategy):
         g["recent_low"] = low_g.transform(lambda s: s.rolling(params.stop_lookback).min())
         g["target"] = high_g.transform(lambda s: s.rolling(params.target_lookback).max())
 
-        # ma20 5일 전, ma5 3일 전 (원래 코드의 -6, -4 기준과 동일하게 맞춤)
+        # ma20 5일 전
         g["ma20_5ago"] = close_g.transform(lambda s: s.rolling(20).mean().shift(5))
-        g["ma5_3ago"] = close_g.transform(lambda s: s.rolling(5).mean().shift(3))
+
+        # ma5 과거값 (slope/연속상승 공용)
+        ma5_g = g.groupby("ticker")["ma5"]
+        g["ma5_1ago"] = ma5_g.shift(1)
+        g["ma5_2ago"] = ma5_g.shift(2)
+        g["ma5_3ago"] = ma5_g.shift(3)
+        g["ma5_4ago"] = ma5_g.shift(4)
+        g["ma5_5ago"] = ma5_g.shift(5)
 
         # ---- ticker별 마지막 row ----
         last = g.groupby("ticker", as_index=False).tail(1).copy()
 
-        # ---- NA 단계 ----
-        need_cols = ["ma20", "ma60", "vol_ma20", "ma5", "ma20_5ago", "ma5_3ago", "std20", "ret20", "high20", "high60", "recent_low", "target", "vol_5"]
+        # ---- NA 체크: n 값에 따라 필요한 ma5 ago만 요구 ----
+        n = int(getattr(params, "ma5_up_days", 0) or 0)
+        # slope는 ma5_3ago가 필요. 연속상승은 n일만큼 필요.
+        need_ma5_ago = max(3, n)  # 최소 3은 slope 때문에
+        ma5_cols = ["ma5_1ago", "ma5_2ago", "ma5_3ago", "ma5_4ago", "ma5_5ago"][:need_ma5_ago]
+
+        need_cols = [
+            "ma20", "ma60", "vol_ma20", "ma5",
+            "ma20_5ago",
+            *ma5_cols,
+            "std20", "ret20", "high20", "high60", "recent_low", "target", "vol_5",
+        ]
+
         na_mask = last[need_cols].isna().any(axis=1)
         fail["na"] = int(na_mask.sum())
         last = last[~na_mask].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         # ---- 조건 필터 ----
         uptrend = last["ma20"] > last["ma60"]
@@ -101,48 +118,28 @@ class PullbackRRStrategy(Strategy):
         last = last[uptrend].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         had_momentum = last["high20"] >= last["high60"] * 0.95
         fail["momentum"] = int((~had_momentum).sum())
         last = last[had_momentum].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         near_ma20 = (last["close"] - last["ma20"]).abs() / last["ma20"] <= params.tolerance
         fail["near_ma20"] = int((~near_ma20).sum())
         last = last[near_ma20].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         vol_ok = (last["vol_ma20"] > 0) & (last["vol_5"] <= last["vol_ma20"] * 1.5)
         fail["vol"] = int((~vol_ok).sum())
         last = last[vol_ok].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         # ---- entry/stop/target/risk/reward/rr ----
         last["entry"] = last["close"].astype(float)
@@ -155,12 +152,7 @@ class PullbackRRStrategy(Strategy):
         last = last[rr_ok].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         last["rr"] = (last["reward"] / last["risk"]).astype(float)
         min_rr_ok = last["rr"] >= params.min_rr
@@ -168,39 +160,32 @@ class PullbackRRStrategy(Strategy):
         last = last[min_rr_ok].copy()
         if last.empty:
             print("[PullbackRR fail stats]", fail)
-            return pd.DataFrame(columns=[
-                "ticker","date","entry","stop","target","risk","reward","rr",
-                "ma5","ma5_slope_3d","ma5_slope_score",
-                "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-            ])
+            return out_empty
 
         # ---- MA5 slope ----
         last["ma5_slope_3d"] = (last["ma5"] / last["ma5_3ago"] - 1.0).fillna(0.0)
         last.loc[~np.isfinite(last["ma5_slope_3d"]), "ma5_slope_3d"] = 0.0
         last["ma5_slope_score"] = (last["ma5_slope_3d"] / 0.01).clip(lower=0.0, upper=1.0)
 
-        if params.require_ma5_positive:
-            ok_ma5 = last["ma5_slope_3d"] > params.ma5_min_slope
-            fail["ma5_slope"] = int((~ok_ma5).sum())
-            last = last[ok_ma5].copy()
+        # ---- MA5 rising N days (1~5) ----
+        if n > 0:
+            cols = ["ma5_1ago", "ma5_2ago", "ma5_3ago", "ma5_4ago", "ma5_5ago"][:n]
+
+            ok = pd.Series(True, index=last.index)
+            prev = last["ma5"]
+            for c in cols:
+                ok = ok & (prev > last[c])
+                prev = last[c]
+
+            fail["ma5_up_days"] = int((~ok).sum())
+            last = last[ok].copy()
             if last.empty:
                 print("[PullbackRR fail stats]", fail)
-                return pd.DataFrame(columns=[
-                    "ticker","date","entry","stop","target","risk","reward","rr",
-                    "ma5","ma5_slope_3d","ma5_slope_score",
-                    "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-                    "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
-                ])
+                return out_empty
 
-        # ---- scoring (동일 로직) ----
-        def _clamp01_series(s: pd.Series) -> pd.Series:
-            return s.clip(lower=0.0, upper=1.0)
-
-        # rr_pref (peak around center)
-        center = 2.15
-        half_width = 1.35
-        last["rr_pref"] = _clamp01_series(1.0 - (last["rr"] - center).abs() / half_width)
+        # ---- scoring ----
+        # rr_pref
+        last["rr_pref"] = _rr_preference_score_series(last["rr"], center=2.15, half_width=1.35)
 
         # trend_score
         last["ma20_slope_5d"] = (last["ma20"] / last["ma20_5ago"] - 1.0).fillna(0.0)
@@ -218,10 +203,14 @@ class PullbackRRStrategy(Strategy):
         last["vol_score"] = _clamp01_series(1.0 - (last["bb_width"] / 0.20))
 
         # vol_score2
-        last["vol_ratio_5v20"] = (last["vol_5"] / last["vol_ma20"]).replace([float("inf"), float("-inf")], 1.0).fillna(1.0)
+        last["vol_ratio_5v20"] = (
+            (last["vol_5"] / last["vol_ma20"])
+            .replace([float("inf"), float("-inf")], 1.0)
+            .fillna(1.0)
+        )
         last["vol_score2"] = _clamp01_series(1.0 - (last["vol_ratio_5v20"] - 0.75).abs() / 0.75)
 
-        # rs_score 후처리
+        # rs_score: 후보군 내 percentile은 out에서 계산
         last["rs_score"] = 0.0
 
         total01 = (
@@ -235,17 +224,17 @@ class PullbackRRStrategy(Strategy):
         last["score"] = (100.0 * total01).astype(float)
 
         out_cols = [
-            "ticker","date","entry","stop","target","risk","reward","rr",
-            "ma5","ma5_slope_3d","ma5_slope_score",
-            "ma20","ma60","ma20_slope_5d","ret20","bb_width","vol_ratio_5v20",
-            "rr_pref","trend_score","vol_score","vol_score2","rs_score","score",
+            "ticker", "date", "entry", "stop", "target", "risk", "reward", "rr",
+            "ma5", "ma5_slope_3d", "ma5_slope_score",
+            "ma20", "ma60", "ma20_slope_5d", "ret20", "bb_width", "vol_ratio_5v20",
+            "rr_pref", "trend_score", "vol_score", "vol_score2", "rs_score", "score",
         ]
         out = last[out_cols].copy()
 
         # RS percentile among candidates
         out["rs_score"] = out["ret20"].rank(pct=True).fillna(0.0)
 
-        # final score recompute (원본과 동일)
+        # final score recompute
         total01 = (
             0.35 * out["rr_pref"]
             + 0.20 * out["trend_score"]
@@ -258,4 +247,3 @@ class PullbackRRStrategy(Strategy):
 
         print("[PullbackRR fail stats]", fail)
         return out.sort_values("score", ascending=False).reset_index(drop=True)
-    

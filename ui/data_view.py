@@ -9,7 +9,7 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
-import download_kospi as dk
+import download_kospi_yf as dk
 from core.config import DATA_DIR
 from core.data_loader import list_dataset_files  # 당장은 유지 (2-2에서 data_loader 교체 예정)
 from core.ticker_names import clear_name_cache
