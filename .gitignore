@@ -11,3 +11,9 @@ env/
 
 # data artifacts
 data/*.csv
+data/*.parquet
+data/_tmp_*
+data/_locks/
+data/cache/
+data/scan_cache/
+data/daily/
