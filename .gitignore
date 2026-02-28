@@ -12,3 +12,5 @@ env/
 # data artifacts
 data/*.csv
 kospi_top200_1y_daily*.csv
+data/daily/kosdaq
+data/daily/kospi
