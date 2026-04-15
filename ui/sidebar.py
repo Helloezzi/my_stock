@@ -51,6 +51,20 @@ def render_sidebar(strategy_labels):
     )
     out["tab"] = tab
 
+    st.sidebar.subheader("View")
+    out["lightweight_mode"] = st.sidebar.checkbox(
+        "Lightweight mobile mode",
+        value=True,
+        help="Use smaller tables and avoid heavy chart rendering by default.",
+        key="lightweight_mode",
+    )
+    out["show_chart"] = st.sidebar.checkbox(
+        "Show chart",
+        value=not out["lightweight_mode"],
+        help="Disable this on mobile for faster response.",
+        key="show_chart",
+    )
+
     st.sidebar.divider()
 
     if tab == "Scanner":

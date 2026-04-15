@@ -19,7 +19,7 @@ def _fmt_float(x, digits=2):
     except Exception:
         return str(x)
 
-def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
+def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker", max_rows: int | None = None):
     if scan_df is None or scan_df.empty:
         st.warning("No scan results.")
         return None
@@ -81,6 +81,9 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
     ]
     df = df[[c for c in preferred_order if c in df.columns]]
 
+    if max_rows and max_rows > 0:
+        df = df.head(int(max_rows)).copy()
+
     display_df_show = df.copy()
 
     # ✅ KRW(정수로 보이게)
@@ -100,7 +103,7 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker"):
     st.dataframe(display_df_show, use_container_width=True, hide_index=True)
 
     # ---- picker ----
-    tickers = scan_df["ticker"].tolist()
+    tickers = df["肄붾뱶"].astype(str).str.zfill(6).tolist() if "肄붾뱶" in df.columns else scan_df["ticker"].tolist()
     if not tickers:
         return None
 

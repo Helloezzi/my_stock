@@ -13,12 +13,20 @@ NAME_CACHE_PATH = DATA_DIR / "ticker_name_map.json"
 
 
 def _load_cache() -> Dict[str, str]:
-    if not NAME_CACHE_PATH.exists():
-        return {}
-    try:
-        return json.loads(NAME_CACHE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    cache: Dict[str, str] = {}
+    candidates = [
+        NAME_CACHE_PATH,
+        DATA_DIR / "cache" / "ticker_names_kospi.json",
+        DATA_DIR / "cache" / "ticker_names_kosdaq.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            cache.update(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return cache
 
 
 def _save_cache(cache: Dict[str, str]) -> None:
@@ -30,14 +38,14 @@ def _save_cache(cache: Dict[str, str]) -> None:
 
 
 @st.cache_data(show_spinner=False)
-def get_ticker_name_map(tickers: list[str]) -> dict[str, str]:
+def get_ticker_name_map(tickers: list[str], online_lookup: bool = True) -> dict[str, str]:
     tickers = [str(t).zfill(6) for t in tickers]
     cache = _load_cache()
 
     # ✅ 없거나, 값이 티커 그대로면(과거 실패로 박제된 케이스) 다시 조회 대상으로 간주
     missing = [t for t in tickers if (t not in cache) or (cache.get(t) == t)]
 
-    if missing:
+    if missing and online_lookup:
         for t in missing:
             try:
                 nm = stock.get_market_ticker_name(t)
@@ -53,6 +61,11 @@ def get_ticker_name_map(tickers: list[str]) -> dict[str, str]:
         _save_cache(cache)
 
     return {t: cache.get(t, t) for t in tickers}
+
+
+@st.cache_data(show_spinner=False)
+def get_ticker_name_map_local(tickers: list[str]) -> dict[str, str]:
+    return get_ticker_name_map(tickers, online_lookup=False)
 
 def clear_name_cache() -> None:
     """원하면 UI 버튼에 연결해서 캐시 초기화 가능."""

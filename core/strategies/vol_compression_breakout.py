@@ -2,8 +2,6 @@
 import pandas as pd
 from .base import Strategy, ScanParams
 
-from pykrx import stock
-
 
 
 def _clamp01(x: float) -> float:
@@ -56,16 +54,6 @@ class VolCompressionBreakoutStrategy(Strategy):
     def scan(self, df: pd.DataFrame, params: ScanParams) -> pd.DataFrame:
         results = []
 
-        # -------------------------
-        # Market cap map (once per scan)
-        # -------------------------
-        scan_date = pd.to_datetime(df["date"].max()).strftime("%Y%m%d")
-        try:
-            cap_df = stock.get_market_cap(scan_date, market="ALL")
-            cap_map = cap_df["시가총액"].to_dict()  # key: ticker(str) -> market cap (KRW)
-        except Exception:
-            cap_map = {}
-
         for t, g in df.groupby("ticker"):
 
             g = g.sort_values("date").copy()
@@ -75,9 +63,10 @@ class VolCompressionBreakoutStrategy(Strategy):
             # -------------------------
             # Filters: market cap / trading value
             # -------------------------
-            mcap = float(cap_map.get(t, 0))
-            if mcap < self.MIN_MARKET_CAP:
-                continue            
+            if "market_cap" in g.columns:
+                mcap = pd.to_numeric(g["market_cap"], errors="coerce").iloc[-1]
+                if pd.notna(mcap) and float(mcap) < self.MIN_MARKET_CAP:
+                    continue
 
             # 20D average trading value (KRW)
             g["value"] = g["close"] * g["volume"]

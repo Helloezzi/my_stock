@@ -1,0 +1,16 @@
+.git
+.gitignore
+.codexignore
+.vscode
+__pycache__
+*.pyc
+*.pyo
+
+data/cache
+data/daily
+data/scan_cache
+data/_locks
+
+project
+readme.md
+ssh and docker terminal log.txt

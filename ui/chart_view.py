@@ -175,7 +175,7 @@ def render_position_sizing(selected, sub, scan_levels, key_prefix: str = "ps"):
     return entry, stop, target
 
 
-def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
+def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float, *, compact: bool = False):
     
     if sub is None or len(sub) == 0:
         st.warning("No data to render chart.")
@@ -200,13 +200,14 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
     x1_pad = x1 + 5  # ✅ 봉 기준 패딩(원하면 10)
 
     # indicators
-    sub["ma5"] = sub["close"].rolling(5).mean()
     sub["ma20"] = sub["close"].rolling(20).mean()
     sub["ma60"] = sub["close"].rolling(60).mean()
-    sub["ma120"] = sub["close"].rolling(120).mean()
-    sub["std20"] = sub["close"].rolling(20).std()
-    sub["bb_upper"] = sub["ma20"] + 2 * sub["std20"]
-    sub["bb_lower"] = sub["ma20"] - 2 * sub["std20"]
+    if not compact:
+        sub["ma5"] = sub["close"].rolling(5).mean()
+        sub["ma120"] = sub["close"].rolling(120).mean()
+        sub["std20"] = sub["close"].rolling(20).std()
+        sub["bb_upper"] = sub["ma20"] + 2 * sub["std20"]
+        sub["bb_lower"] = sub["ma20"] - 2 * sub["std20"]
 
     fig = go.Figure()
 
@@ -220,17 +221,18 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
     ))
 
     # ✅ MAs
-    fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma5"],   name="MA5",   line=dict(color="#39FF14", width=1)))
     fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma20"],  name="MA20",  line=dict(color="#D32020", width=1)))
     fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma60"],  name="MA60",  line=dict(color="#F57800", width=1)))
-    fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma120"], name="MA120", line=dict(color="#8122A1", width=1)))
+    if not compact:
+        fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma5"],   name="MA5",   line=dict(color="#39FF14", width=1)))
+        fig.add_trace(go.Scatter(x=sub["x"], y=sub["ma120"], name="MA120", line=dict(color="#8122A1", width=1)))
 
-    # ✅ BB
-    fig.add_trace(go.Scatter(x=sub["x"], y=sub["bb_upper"], name="BB Upper",
-                             line=dict(color="rgba(255,200,0,0.45)", width=1)))
-    fig.add_trace(go.Scatter(x=sub["x"], y=sub["bb_lower"], name="BB Lower",
-                             line=dict(color="rgba(255,200,0,0.45)", width=1),
-                             fill="tonexty", fillcolor="rgba(255,200,0,0.06)"))
+        # ✅ BB
+        fig.add_trace(go.Scatter(x=sub["x"], y=sub["bb_upper"], name="BB Upper",
+                                 line=dict(color="rgba(255,200,0,0.45)", width=1)))
+        fig.add_trace(go.Scatter(x=sub["x"], y=sub["bb_lower"], name="BB Lower",
+                                 line=dict(color="rgba(255,200,0,0.45)", width=1),
+                                 fill="tonexty", fillcolor="rgba(255,200,0,0.06)"))
 
     # legend only traces
     fig.add_trace(go.Scatter(x=[x0], y=[None], mode="lines",
@@ -279,12 +281,15 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
         yaxis2=dict(overlaying="y", side="right", tickformat=",", showgrid=False,
                     zeroline=False, showline=False, ticks="outside", ticklen=4, showticklabels=True),
         xaxis_rangeslider_visible=False,
-        height=650,
+        height=420 if compact else 650,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
         margin=dict(t=80, r=70),
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    if compact:
+        return
 
     # ✅ volume chart also uses index axis (no rangebreaks needed)
     colors = ["#F04452" if c >= o else "#3182F6" for c, o in zip(sub["close"], sub["open"])]
@@ -301,7 +306,7 @@ def render_chart(sub: pd.DataFrame, entry: float, stop: float, target: float):
     st.plotly_chart(vol_fig, use_container_width=True)
 
 
-def render_chart_and_sizing_two_column(*, selected: str, sub, scan_levels, key_prefix: str):
+def render_chart_and_sizing_two_column(*, selected: str, sub, scan_levels, key_prefix: str, compact: bool = False):
     col_chart, col_ps = st.columns([2.2, 1.0], gap="large")
 
     with col_ps:
@@ -311,6 +316,6 @@ def render_chart_and_sizing_two_column(*, selected: str, sub, scan_levels, key_p
         )
 
     with col_chart:
-        render_chart(sub, entry, stop, target)
+        render_chart(sub, entry, stop, target, compact=compact)
 
     return entry, stop, target

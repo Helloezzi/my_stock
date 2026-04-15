@@ -6,7 +6,7 @@ from datetime import datetime, time as dtime
 from core.config import APP_TITLE
 from core.data_loader import load_all_markets, daily_fingerprint
 from core.universe import build_universe
-from core.ticker_names import get_ticker_name_map
+from core.ticker_names import get_ticker_name_map_local
 
 from core.market_index import load_kospi_index_1y
 from core.market_filter import kospi_market_ok
@@ -80,7 +80,7 @@ if df is None or df.empty:
     st.stop()
 
 tickers = sorted(df["ticker"].astype(str).str.zfill(6).unique())
-name_map = get_ticker_name_map(tickers)
+name_map = get_ticker_name_map_local(tickers)
 
 if not tickers:
     st.warning("No tickers found in the selected universe.")
@@ -185,7 +185,8 @@ if tab == "Scanner":
         if not market_ok:
             st.warning("KOSPI filter blocked scan.")
         else:
-            pick = render_scanner_results(scan_df, name_map)
+            max_rows = 20 if sb.get("lightweight_mode", False) else None
+            pick = render_scanner_results(scan_df, name_map, max_rows=max_rows)
             if pick:
                 st.session_state["selected_scan_ticker"] = pick
 
@@ -237,9 +238,19 @@ if selected:
 
     prefix = "ps_scan" if tab == "Scanner" else "ps_browse"
 
-    render_chart_and_sizing_two_column(
-        selected=selected,
-        sub=sub,
-        scan_levels=scan_levels,
-        key_prefix=prefix,
-    )
+    if sb.get("show_chart", True):
+        render_chart_and_sizing_two_column(
+            selected=selected,
+            sub=sub.tail(160).copy() if sb.get("lightweight_mode", False) else sub,
+            scan_levels=scan_levels,
+            key_prefix=prefix,
+            compact=sb.get("lightweight_mode", False),
+        )
+    else:
+        last = sub.iloc[-1]
+        st.info("Chart rendering is disabled in lightweight mode. Turn on 'Show chart' in the sidebar when needed.")
+        st.write(
+            f"Latest close: **{float(last['close']):,.0f}** | "
+            f"Latest date: **{pd.to_datetime(last['date']).date()}** | "
+            f"Rows: **{len(sub):,}**"
+        )
