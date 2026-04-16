@@ -120,11 +120,34 @@ def _fetch_symbol(symbol: str, start: str, end: str, sleep_sec: float = 0.0) -> 
     return out[cols]
 
 
-def _save_daily_files(df: pd.DataFrame, out_dir: Path) -> int:
+def _extract_yyyymmdd_from_name(path: Path) -> str | None:
+    stem = path.stem
+    for token in reversed(stem.split("_")):
+        if len(token) == 8 and token.isdigit():
+            return token
+    return None
+
+
+def _existing_daily_dates(out_dir: Path) -> set[str]:
+    if not out_dir.exists():
+        return set()
+    files = list(out_dir.glob("krx_ohlcv_*.csv")) + list(out_dir.glob("ohlcv_*.csv"))
+    dates = {_extract_yyyymmdd_from_name(path) for path in files}
+    return {d for d in dates if d}
+
+
+def _requested_weekdays(start: str, end: str) -> list[str]:
+    rng = pd.date_range(start=pd.to_datetime(start), end=pd.to_datetime(end), freq="B")
+    return [ts.strftime("%Y%m%d") for ts in rng]
+
+
+def _save_daily_files(df: pd.DataFrame, out_dir: Path, allowed_dates: set[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     saved = 0
 
     for day, day_df in df.groupby(df["date"].dt.strftime("%Y%m%d")):
+        if allowed_dates is not None and day not in allowed_dates:
+            continue
         out_path = out_dir / f"krx_ohlcv_{day}.csv"
         day_df = day_df.copy()
         day_df["date"] = pd.to_datetime(day_df["date"], errors="coerce").dt.strftime("%Y%m%d")
@@ -145,13 +168,24 @@ def backfill_market(
     limit: int | None = None,
     sleep_sec: float = 0.0,
 ) -> tuple[pd.DataFrame, list[str], int]:
+    out_dir = Path("data/daily") / spec.name
+    existing_dates = _existing_daily_dates(out_dir)
+    requested_dates = _requested_weekdays(start, end)
+    missing_dates = [day for day in requested_dates if day not in existing_dates]
+
+    if not missing_dates:
+        print(f"[{spec.name}] skip: all requested weekdays already exist ({len(requested_dates)} days)")
+        return pd.DataFrame(columns=["date", "ticker", "open", "high", "low", "close", "volume"]), [], 0
+
+    fetch_start = min(missing_dates)
+    fetch_end = max(missing_dates)
     tickers = _load_universe(spec.universe_csv, limit=limit)
     frames: list[pd.DataFrame] = []
     failed: list[str] = []
 
     for idx, ticker in enumerate(tickers, start=1):
         try:
-            df = _fetch_symbol(ticker, start, end, sleep_sec=sleep_sec)
+            df = _fetch_symbol(ticker, fetch_start, fetch_end, sleep_sec=sleep_sec)
             if df.empty:
                 failed.append(ticker)
             else:
@@ -165,7 +199,7 @@ def backfill_market(
     merged = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(
         columns=["date", "ticker", "open", "high", "low", "close", "volume"]
     )
-    saved = _save_daily_files(merged, Path("data/daily") / spec.name) if not merged.empty else 0
+    saved = _save_daily_files(merged, out_dir, allowed_dates=set(missing_dates)) if not merged.empty else 0
     return merged, failed, saved
 
 
