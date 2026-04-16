@@ -75,8 +75,27 @@ def _load_local_name_cache() -> dict[str, str]:
         except Exception:
             continue
         if isinstance(raw, dict):
-            cache.update({str(k).zfill(6): str(v) for k, v in raw.items()})
+            source = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+            cache.update(
+                {
+                    str(k).zfill(6): str(v)
+                    for k, v in source.items()
+                    if str(k).strip().isdigit() and len(str(k).strip()) <= 6
+                }
+            )
     return cache
+
+
+def _resolve_pick_stage(strategy_key: str, row: dict[str, Any]) -> str:
+    stage = _normalize_scalar(row.get("stage"))
+    if stage not in (None, "", "None"):
+        return str(stage)
+
+    defaults = {
+        "pullback_rr": "PULLBACK",
+        "vol_compression_breakout": "WATCH",
+    }
+    return defaults.get(str(strategy_key).strip(), "PICK")
 
 
 def _get_strategy_by_key(strategy_key: str):
@@ -202,14 +221,15 @@ def build_published_picks(config: PublishedPicksConfig | None = None) -> tuple[d
     picks: list[dict[str, Any]] = []
     for idx, row in enumerate(picks_df.to_dict("records"), start=1):
         ticker = str(row.get("ticker", "")).zfill(6)
+        name = str(row.get("name", "")).strip() or name_map.get(ticker, ticker)
         picks.append(
             {
                 "rank": idx,
                 "ticker": ticker,
-                "name": name_map.get(ticker, ticker),
+                "name": name,
                 "market": str(row.get("market", "")),
                 "date": _normalize_scalar(row.get("date")),
-                "stage": _normalize_scalar(row.get("stage")),
+                "stage": _resolve_pick_stage(strategy.key, row),
                 "score": _normalize_scalar(row.get("score")),
                 "entry": _normalize_scalar(row.get("entry")),
                 "stop": _normalize_scalar(row.get("stop")),
