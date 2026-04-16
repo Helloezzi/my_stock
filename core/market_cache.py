@@ -175,6 +175,40 @@ def load_all_markets(
     return dfs, infos
 
 
+@st.cache_data(show_spinner=False)
+def load_selected_ticker_history(
+    ticker: str,
+    cache_base_dir: str | Path = DATA_DIR / "cache",
+) -> pd.DataFrame:
+    ticker = str(ticker).zfill(6)
+    cache_dir = Path(cache_base_dir)
+    frames: list[pd.DataFrame] = []
+
+    for market in MARKETS:
+        cache_path = cache_dir / f"{market}_merged.parquet"
+        if not cache_path.exists():
+            continue
+
+        try:
+            df = pd.read_parquet(cache_path, filters=[("ticker", "==", ticker)])
+        except Exception:
+            df = pd.read_parquet(cache_path)
+            if "ticker" in df.columns:
+                df["ticker"] = df["ticker"].astype("string").str.zfill(6)
+                df = df[df["ticker"] == ticker].copy()
+            else:
+                df = pd.DataFrame()
+
+        if df is not None and not df.empty:
+            frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+
+    merged = pd.concat(frames, ignore_index=True)
+    return _normalize_loaded_frame(merged)
+
+
 def latest_daily_yyyymmdd(daily_dir: Path) -> Optional[str]:
     dates = [_extract_yyyymmdd(path) for path in _list_daily_csvs(daily_dir)]
     dates = [date for date in dates if date]

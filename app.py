@@ -8,6 +8,7 @@ from core.app_runtime import ensure_session_defaults, load_buffers
 from core.auto_daily import try_run_daily_once_async
 from core.config import APP_TITLE
 from core.data_loader import daily_fingerprint
+from core.market_cache import load_selected_ticker_history
 from core.published_picks import load_published_picks
 from core.strategies import get_strategies
 from core.ticker_names import get_ticker_name_map_local
@@ -53,21 +54,14 @@ if lightweight_today_picks:
     )
 
     if selected:
-        fp = daily_fingerprint()
-        dfs, infos = load_buffers(fp)
-        combined = pd.concat(
-            [df for df in dfs.values() if df is not None and not df.empty],
-            ignore_index=True,
-        ) if dfs else pd.DataFrame()
-
-        if combined.empty:
-            st.warning(t("app.published_chart_missing"))
-            st.stop()
-
         name_map = {
             str(item.get("ticker", "")).zfill(6): item.get("name", str(item.get("ticker", "")).zfill(6))
             for item in published.get("picks", [])
         }
+        combined = load_selected_ticker_history(str(selected).zfill(6))
+        if combined.empty and sb.get("show_chart", False):
+            st.warning(t("app.published_chart_missing"))
+            st.stop()
         render_selected_panel(
             tab=t("sidebar.tab.scanner"),
             sb=sb,
