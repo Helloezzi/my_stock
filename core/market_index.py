@@ -1,43 +1,27 @@
-
-import yfinance as yf
 import pandas as pd
 import streamlit as st
+import yfinance as yf
 
 
-@st.cache_data(show_spinner=False)
-def load_kospi_index_1y():
-    """
-    KOSPI Index (^KS11) 1Y daily
-    yfinance가 환경/버전에 따라 MultiIndex 컬럼을 반환하는 경우가 있어 방어적으로 처리
-    """
-    raw = yf.download("^KS11", period="1y", interval="1d", auto_adjust=False, progress=False)
-
+def _load_index_1y(symbol: str) -> pd.DataFrame:
+    raw = yf.download(symbol, period="1y", interval="1d", auto_adjust=False, progress=False)
     if raw is None or raw.empty:
         return pd.DataFrame()
 
     df = raw.copy()
-
-    # 1) MultiIndex 컬럼인 경우 (예: ('Close', '^KS11')) 형태 -> Close만 뽑기
     if isinstance(df.columns, pd.MultiIndex):
-        # 보통 첫 레벨에 Open/High/Low/Close/... 가 있고
-        # 두 번째 레벨에 티커가 붙음
         if "Close" in df.columns.get_level_values(0):
             close_series = df["Close"]
-            # close_series가 DataFrame일 수 있으니 첫 컬럼(=^KS11)을 뽑음
             if isinstance(close_series, pd.DataFrame):
                 close_series = close_series.iloc[:, 0]
             df = pd.DataFrame({"close": close_series})
         else:
-            # 예상 못한 형태면 평탄화 후 시도
             df.columns = ["_".join(map(str, c)).strip() for c in df.columns.to_list()]
-            # Close 비슷한 컬럼 찾기
             close_candidates = [c for c in df.columns if c.lower().startswith("close")]
             if not close_candidates:
                 return pd.DataFrame()
             df = df.rename(columns={close_candidates[0]: "close"})[["close"]]
-
     else:
-        # 2) 일반 컬럼인 경우: Close가 있으면 close로 rename
         if "Close" in df.columns:
             df = df.rename(columns={"Close": "close"})[["close"]]
         elif "close" in df.columns:
@@ -45,7 +29,6 @@ def load_kospi_index_1y():
         else:
             return pd.DataFrame()
 
-    # 인덱스(날짜)를 컬럼으로
     df = df.reset_index()
     if "Date" in df.columns:
         df = df.rename(columns={"Date": "date"})
@@ -54,9 +37,68 @@ def load_kospi_index_1y():
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
-
     df = df.dropna(subset=["date", "close"]).sort_values("date")
-
     df["ma20"] = df["close"].rolling(20).mean()
     df["ma60"] = df["close"].rolling(60).mean()
     return df
+
+
+@st.cache_data(show_spinner=False)
+def load_kospi_index_1y():
+    return _load_index_1y("^KS11")
+
+
+@st.cache_data(show_spinner=False)
+def load_kosdaq_index_1y():
+    return _load_index_1y("^KQ11")
+
+
+def build_market_index_snapshot() -> dict[str, dict]:
+    snapshots: dict[str, dict] = {}
+    loaders = {
+        "KOSPI": load_kospi_index_1y,
+        "KOSDAQ": load_kosdaq_index_1y,
+    }
+    for market_name, loader in loaders.items():
+        df = loader()
+        if df is None or df.empty:
+            continue
+        latest = df.dropna(subset=["date", "close"]).sort_values("date")
+        if latest.empty:
+            continue
+
+        last = latest.iloc[-1]
+        prev_close = float(latest.iloc[-2]["close"]) if len(latest) >= 2 else None
+        close = float(last["close"])
+        change_pct = ((close - prev_close) / prev_close * 100.0) if prev_close not in (None, 0) else None
+
+        snapshots[market_name] = {
+            "date": pd.to_datetime(last["date"]).strftime("%Y-%m-%d"),
+            "close": round(close, 2),
+            "change_pct": round(float(change_pct), 2) if change_pct is not None else None,
+        }
+
+    extra_symbols = {
+        "USD/KRW": "KRW=X",
+        "S&P 500": "^GSPC",
+        "NASDAQ": "^IXIC",
+    }
+    for label, symbol in extra_symbols.items():
+        df = _load_index_1y(symbol)
+        if df is None or df.empty:
+            continue
+        latest = df.dropna(subset=["date", "close"]).sort_values("date")
+        if latest.empty:
+            continue
+
+        last = latest.iloc[-1]
+        prev_close = float(latest.iloc[-2]["close"]) if len(latest) >= 2 else None
+        close = float(last["close"])
+        change_pct = ((close - prev_close) / prev_close * 100.0) if prev_close not in (None, 0) else None
+
+        snapshots[label] = {
+            "date": pd.to_datetime(last["date"]).strftime("%Y-%m-%d"),
+            "close": round(close, 2),
+            "change_pct": round(float(change_pct), 2) if change_pct is not None else None,
+        }
+    return snapshots

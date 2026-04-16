@@ -29,6 +29,7 @@ This file records working decisions so future implementation does not need to re
 - The UI should prefer precomputed daily picks over full-market recomputation.
 - Full-market loading should remain available as a secondary path, not the default mobile path.
 - The detailed file and flow design for this is tracked in `project/TODAY_PICKS_DESIGN.md`.
+- Data-source-specific operational notes are tracked in `project/DATA_SOURCE_NOTES.md`.
 
 ## UI Direction
 - Mobile-first speed matters more than showing every control on first load.

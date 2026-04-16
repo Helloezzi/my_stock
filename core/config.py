@@ -1,7 +1,7 @@
 # core/config.py
 from pathlib import Path
 
-APP_TITLE = "KOSPI Swing Viewer"
+APP_TITLE = "국장 스윙 뷰어"
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # 프로젝트 루트 기준
 DATA_DIR = BASE_DIR / "data"

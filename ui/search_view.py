@@ -1,18 +1,19 @@
 import streamlit as st
 
 from core.links import naver_stock_url
+from ui.texts import t
 
 
 def render_search_and_select(
     tickers,
     name_map,
     state_key="selected_browse_ticker",
-    title="Search Top200",
+    title=None,
 ):
-    st.subheader(title)
+    st.subheader(title or t("search.title_browse", market_label="ALL"))
 
     query = st.text_input(
-        "Search (Ticker or Name)",
+        t("search.input"),
         value="",
         key=f"{state_key}_search",
     ).strip()
@@ -24,7 +25,7 @@ def render_search_and_select(
             filtered.append(ticker)
 
     if not filtered:
-        st.warning("No matching results.")
+        st.warning(t("search.no_match"))
         return None
 
     current = st.session_state.get(state_key, filtered[0])
@@ -33,7 +34,7 @@ def render_search_and_select(
         st.session_state[state_key] = current
 
     selected = st.selectbox(
-        "Select Ticker",
+        t("search.select_ticker"),
         options=filtered,
         index=filtered.index(current),
         format_func=lambda x: f"{x} - {name_map.get(x, x)}",
@@ -46,7 +47,7 @@ def render_search_and_select(
 
 def render_naver_link(ticker: str) -> None:
     st.link_button(
-        label="Open Naver Stock Page",
+        label=t("search.naver_link"),
         url=naver_stock_url(ticker),
-        help="Open the selected stock in Naver Finance",
+        help=t("search.naver_help"),
     )

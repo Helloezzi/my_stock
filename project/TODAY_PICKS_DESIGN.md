@@ -117,6 +117,9 @@
 - If the file exists, mobile or lightweight mode should show it first.
 - Do not load full parquet buffers on the first lightweight screen.
 - In lightweight mode, prefer a compact summary-and-selection view over a full table on first render.
+- Do not show internal market-filter math in the main mobile UI.
+- Keep the market-filter rule documented in markdown, not explained inline on the first screen.
+- Emphasize trade date plus KOSPI/KOSDAQ close levels in the top summary area.
 
 ### Phase 2
 - Keep a manual or desktop path for full scan and exploration.

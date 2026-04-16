@@ -80,13 +80,16 @@ def main() -> int:
     print(f"[picks] strategy:       {source.get('strategy_key')}")
     print(f"[picks] pick_count:     {summary.get('pick_count')}")
     print(f"[picks] per_market:     {summary.get('per_market_counts')}")
+    print(f"[picks] labels:         {summary.get('label_counts')}")
+    print(f"[picks] actionable:     {summary.get('actionable_count')}")
+    print(f"[picks] no_pick:        {summary.get('no_pick')}")
 
     picks = payload.get("picks", [])
     if picks:
         print("[picks] top_entries:")
         for item in picks[:5]:
             print(
-                f"  - {item.get('market')} {item.get('ticker')} "
+                f"  - {item.get('action_label')} {item.get('market')} {item.get('ticker')} "
                 f"{item.get('name')} score={item.get('score')}"
             )
     else:
