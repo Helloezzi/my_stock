@@ -1,7 +1,7 @@
 # core/config.py
 from pathlib import Path
 
-APP_TITLE = "국장 스윙 뷰어"
+APP_TITLE = "시그널 보드"
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # 프로젝트 루트 기준
 DATA_DIR = BASE_DIR / "data"
