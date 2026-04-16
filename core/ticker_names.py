@@ -23,9 +23,19 @@ def _load_cache() -> Dict[str, str]:
         if not path.exists():
             continue
         try:
-            cache.update(json.loads(path.read_text(encoding="utf-8")))
+            raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             continue
+        if not isinstance(raw, dict):
+            continue
+        source = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+        cache.update(
+            {
+                str(k).zfill(6): str(v)
+                for k, v in source.items()
+                if str(k).strip().isdigit() and len(str(k).strip()) <= 6
+            }
+        )
     return cache
 
 

@@ -13,6 +13,7 @@ from core.data_loader import load_all_markets
 from core.market_filter import kospi_market_ok
 from core.market_index import load_kospi_index_1y
 from core.strategies import ScanParams, get_strategies
+from core.ticker_names import get_ticker_name_map
 from core.universe import build_universe
 
 PICKS_DIR = DATA_DIR / "picks"
@@ -84,6 +85,29 @@ def _load_local_name_cache() -> dict[str, str]:
                 }
             )
     return cache
+
+
+def _enrich_name_cache_for_tickers(tickers: list[str], fallback_map: dict[str, str]) -> dict[str, str]:
+    normalized = [str(t).zfill(6) for t in tickers if str(t).strip()]
+    if not normalized:
+        return fallback_map
+
+    missing = [ticker for ticker in normalized if not fallback_map.get(ticker) or fallback_map.get(ticker) == ticker]
+    if not missing:
+        return fallback_map
+
+    try:
+        resolved = get_ticker_name_map(missing, online_lookup=True)
+    except Exception:
+        return fallback_map
+
+    merged = dict(fallback_map)
+    for ticker, name in resolved.items():
+        ticker_key = str(ticker).zfill(6)
+        text = str(name).strip()
+        if text and text != ticker_key:
+            merged[ticker_key] = text
+    return merged
 
 
 def _resolve_pick_stage(strategy_key: str, row: dict[str, Any]) -> str:
@@ -215,6 +239,8 @@ def build_published_picks(config: PublishedPicksConfig | None = None) -> tuple[d
     picks_df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if not picks_df.empty:
         picks_df = picks_df.sort_values(["score", "market"], ascending=[False, True]).reset_index(drop=True)
+        pick_tickers = picks_df["ticker"].astype(str).str.zfill(6).tolist()
+        name_map = _enrich_name_cache_for_tickers(pick_tickers, name_map)
 
     trade_date = max(latest_dates) if latest_dates else datetime.now().strftime("%Y-%m-%d")
 
