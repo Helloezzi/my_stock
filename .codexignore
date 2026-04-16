@@ -21,16 +21,20 @@ data/_locks/
 data/*.csv
 data/*.parquet
 data/*.json
+data/universe_*.csv
+data/*top200*.csv
+data/*top500*.csv
+data/*all*.csv
 
 # OS noise
 .DS_Store
+*.log
 
 # Legacy / currently unused code paths
-download_daily_yf.py
-download_kospi_yf.py
-download_kosdaq_yf.py
-download_kospi.py
-ui/data_view.py
-core/bootstrap_daily.py
-core/test_date_20260227.py
-krx_test.py
+legacy/
+
+# Historical notes / logs
+ssh and docker terminal log.txt
+
+# User-facing note with broken encoding; not needed for code tasks
+readme.md

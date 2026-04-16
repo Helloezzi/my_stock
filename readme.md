@@ -1,157 +1,180 @@
-### 📘 스윙 트레이딩 전략 (예약 매매 전용)
-0. 전략 개요
-
-본 전략은 장기 ETF 중심 자산 구조 위에 운용하는 위성 스윙 전략이다.
-목표는 다음과 같다:
-
-추가 수익 창출
-
-기술적 분석 능력 향상
-
-감정 개입 최소화
-
-기대값 기반 반복 구조 확립
-
-전업 트레이딩이 아닌 직장인 예약 매매 환경을 전제로 설계되었다.
-
-### 1. 자산 운용 원칙
-자금 구조
-
-전체 자산의 10~20%만 트레이딩 자금으로 사용
-
-1회 트레이드 최대 리스크: 전체 자산의 1% 이내
-
-금지 원칙
-
-몰빵 금지
-
-손절 미이행 금지
-
-손실 후 베팅 확대 금지
-
-### 2. 시장 필터 (Market Regime Filter)
-
-다음 조건 중 최소 1개 이상 충족 시에만 신규 진입:
-
-KOSPI 종가 > MA20
-
-KOSPI MA20 > MA60
-
-권장: 두 조건 모두 충족
-
-시장 하락 국면에서는 신규 진입 중단.
-
-### 3. 종목 스캔 조건
-
-아래 조건을 모두 충족해야 후보 선정:
-
-MA20 > MA60 (상승 추세)
-
-최근 20일 고점 ≈ 60일 고점 (모멘텀 유지)
-
-종가가 MA20 ±3% 이내 (눌림 구간)
-
-최근 5일 평균 거래량 < 20일 평균 거래량 (거래량 감소)
-
-R/R ≥ 1.8
-
-### 4. 종목 선택 기준
-
-상위 3개 후보 검토
-
-R/R 1.8 ~ 2.5 구간 우선
-
-과도한 급등 종목 회피
-
-테마성 / 뉴스성 급등 종목 회피
-
-### 5. 진입 전략 (예약 매매 전용)
-기본 방식
-
-종가 기준 스캔
-
-다음날 MA20 근처 지정가 매수
-
-체결 즉시 손절 예약
-
-대안 방식
-
-종가 확인 후 다음날 시가 매수
-
-즉시 손절 설정
-
-### 6. 리스크 관리 (R 개념)
-정의
-
-1R = Entry − Stop
-
-손절 = 1R
-
-목표가 ≥ 2R
-
-포지션 결정 방식
-
-투자금 기준이 아닌 손실 허용액 기준
-
-리스크 기준 수량 계산
-
-### 7. 익절 전략
-권장 구조
-
-1R 도달 시 50% 익절
-
-나머지:
-
-목표가 도달 시 전량 매도
-또는
-
-트레일링 스탑 적용
-
-### 8. 재진입 규칙
-
-포지션 종료 후 재스캔
-
-동일 종목 재진입 가능
-
-단, 스캔 조건 재충족 필수
-
-### 9. 금지 사항
-
-손절 취소 금지
-
-뉴스 기반 감정 매매 금지
-
-보유 중 규칙 변경 금지
-
-### 10. 기대 구조
-
-목표 승률: 45~55%
-
-평균 R/R: 1.8 ~ 2.5
-
-목표: 장기 기대값 양수 유지
-
-본 전략은 “매번 승리”가 목적이 아니다.
-리스크 통제 하에 확률을 반복하는 구조다.
-
-### 11. 매매 전 체크리스트
-
- 시장 필터 통과
-
- R/R ≥ 1.8
-
- 손절 자동 설정 완료
-
- 포지션 사이징 계산 완료
-
- 감정 개입 없음
-
-### 12. 전략 철학
-
-예측이 아닌 확률
-
-감정이 아닌 규칙
-
-단기 결과보다 장기 통계
-
-수익보다 구조
+# my_stock
+
+Developer-focused KOSPI/KOSDAQ daily swing-scanning app built with Streamlit.
+
+## What This Repo Does
+- Downloads or backfills daily market data.
+- Merges daily CSV snapshots into parquet caches.
+- Builds a market universe for KOSPI or KOSDAQ.
+- Runs strategy-based scans on cached data.
+- Shows chart, levels, and position sizing in a Streamlit UI.
+
+## Main Entry Points
+- `app.py`
+  Main Streamlit entry.
+- `core/app_runtime.py`
+  Loads market buffers and initializes runtime/session defaults.
+- `core/data_loader.py`
+  Stable import surface for data helpers.
+- `download_daily_fdr.py`
+  Backfill script using FinanceDataReader NAVER source.
+- `deploy_nas.bat`
+  Windows helper for NAS deploy, restart, logs, and backfill.
+- `project/NAS_DOCKER.md`
+  NAS deployment notes.
+
+## Project Layout
+```text
+my_stock/
+  app.py
+  download_daily_fdr.py
+  deploy_nas.bat
+  run.bat
+  core/
+    app_runtime.py
+    data_files.py
+    data_fingerprint.py
+    data_loader.py
+    downloader_daily.py
+    market_cache.py
+    scan_cache.py
+    universe.py
+    strategies/
+  ui/
+    sidebar.py
+    scanner_tab.py
+    scanner_view.py
+    selection_view.py
+    search_view.py
+    chart_view.py
+    chart_renderer.py
+    position_view.py
+  data/
+    daily/
+    cache/
+    scan_cache/
+    _locks/
+  scripts/
+    data_check.py
+  project/
+    NAS_DOCKER.md
+  legacy/
+```
+
+## Root Folder Rule
+- Keep only real runtime entry points at repo root.
+- Put reference docs under `project/`.
+- Put one-off developer helper scripts under `scripts/`.
+- Keep inactive or historical code under `legacy/`.
+
+## Local Development
+### 1. Install
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2. Run
+```powershell
+streamlit run app.py
+```
+
+App default URL:
+- `http://localhost:8501`
+
+## Docker Run
+```powershell
+docker compose up --build
+```
+
+Exposed port:
+- `8501`
+
+Volume mapping:
+- local `./data` -> container `/app/data`
+
+## Data Flow
+1. A downloader writes daily snapshots into `data/daily/<market>/`.
+2. The loader merges unseen files into `data/cache/<market>_merged.parquet`.
+3. The app loads parquet caches into memory.
+4. A universe is built from the selected market and optional Top-N filter.
+5. A strategy scan runs and stores reusable scan cache output.
+6. UI renders candidates and the selected chart view.
+
+## Data Conventions
+- Ticker format: zero-padded 6-digit string.
+- Daily file format: `krx_ohlcv_YYYYMMDD.csv`.
+- Cache file format: `<market>_merged.parquet`.
+- Supported markets in current app flow: `kospi`, `kosdaq`.
+
+## Key Modules
+### `core/`
+- `downloader_daily.py`
+  One-day downloader path.
+- `market_cache.py`
+  Daily CSV merge/load logic.
+- `data_fingerprint.py`
+  Freshness key used to invalidate Streamlit cache.
+- `universe.py`
+  Market and Top-N universe filtering.
+- `scan_cache.py`
+  Persistent scan-result caching.
+- `strategies/`
+  Strategy registry and scan implementations.
+
+### `ui/`
+- `sidebar.py`
+  User controls and scan parameters.
+- `scanner_tab.py`
+  Scanner tab orchestration.
+- `scanner_view.py`
+  Result table rendering.
+- `selection_view.py`
+  Browse flow and selected ticker coordination.
+- `chart_renderer.py`
+  Candlestick and related chart rendering.
+- `position_view.py`
+  Position-sizing view.
+
+## NAS Deployment
+Common commands:
+
+```powershell
+.\deploy_nas.bat deploy
+.\deploy_nas.bat fast
+.\deploy_nas.bat full
+.\deploy_nas.bat fastfull
+.\deploy_nas.bat status
+.\deploy_nas.bat logs
+.\deploy_nas.bat backfill
+```
+
+Current batch defaults are defined inside `deploy_nas.bat`:
+- NAS host
+- SSH port
+- remote deploy directory
+- docker binary path
+- backfill date range
+
+Detailed NAS notes:
+- `project/NAS_DOCKER.md`
+
+## Development Rules
+- Keep business logic in `core/`.
+- Keep rendering logic in `ui/`.
+- Keep `app.py` thin and orchestration-oriented.
+- Register new strategies in `core/strategies/__init__.py`.
+- Prefer reading from parquet cache in interactive paths.
+- Treat `legacy/` as reference-only, not active runtime code.
+
+## Token-Saving Notes
+- Codex should prefer `project/*.md` for quick repo context.
+- `.codexignore` excludes generated data, logs, and legacy code.
+- Large inactive scripts were moved to `legacy/`.
+
+## Troubleshooting
+- If UI shows stale data, clear Streamlit cache and confirm latest daily files exist.
+- If parquet cache is stale, verify filename convention matches `krx_ohlcv_YYYYMMDD.csv`.
+- If NAS deploy succeeds but data is old, run a backfill step separately or use `full` / `fastfull`.
+- If mobile is slow, prefer lightweight mode and avoid unnecessary rebuilds during deploy.

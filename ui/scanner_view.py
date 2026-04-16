@@ -1,7 +1,6 @@
-# ui/scanner_view.py
+import pandas as pd
 import streamlit as st
 
-import pandas as pd
 
 def _fmt_int(x):
     if pd.isna(x):
@@ -11,6 +10,7 @@ def _fmt_int(x):
     except Exception:
         return str(x)
 
+
 def _fmt_float(x, digits=2):
     if pd.isna(x):
         return ""
@@ -18,6 +18,7 @@ def _fmt_float(x, digits=2):
         return f"{float(x):,.{digits}f}"
     except Exception:
         return str(x)
+
 
 def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker", max_rows: int | None = None):
     if scan_df is None or scan_df.empty:
@@ -35,7 +36,6 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker", 
     if "ma5_slope_score" in df.columns:
         df["ma5_score"] = df["ma5_slope_score"].round(2)
 
-    # ✅ 1) 먼저 "원본 컬럼명" 기준으로 보여줄 컬럼만 선택
     keep_cols = [
         "ticker", "name", "date",
         "entry", "stop", "target",
@@ -48,62 +48,51 @@ def render_scanner_results(scan_df, name_map, state_key="selected_scan_ticker", 
     ]
     df = df[[c for c in keep_cols if c in df.columns]]
 
-    # ✅ 2) 그 다음에 rename
     col_rename = {
-        "ticker": "코드",
-        "name": "이름",
-        "date": "기준",
-        "entry": "진입",
-        "stop": "손절",
-        "target": "목표",
+        "ticker": "Code",
+        "name": "Name",
+        "date": "Date",
+        "entry": "Entry",
+        "stop": "Stop",
+        "target": "Target",
         "rr": "R/R",
-        "vol_ratio_5v20": "거래",
-
-        "rr_pref": "RR선호",
-        "trend_score": "추세",
-        "rs_score": "상대강도",
-        "vol_score": "변동성",
-        "score": "총점",
-        
-        "ma5_slope_%": "MA5기울기(%)",
-        "ma5_score": "MA5점수",
+        "vol_ratio_5v20": "Volume",
+        "rr_pref": "RR Pref",
+        "trend_score": "Trend",
+        "rs_score": "Relative Strength",
+        "vol_score": "Volatility",
+        "score": "Score",
+        "ma5_slope_%": "MA5 Slope %",
+        "ma5_score": "MA5 Score",
     }
     df = df.rename(columns=col_rename)
 
-    # ✅ 3) 표시 순서(한글 컬럼명 기준)
     preferred_order = [
-        "이름", "코드", "기준",
-        "진입", "손절", "목표",
+        "Name", "Code", "Date",
+        "Entry", "Stop", "Target",
         "R/R",
-        "RR선호", "추세", "MA5기울기(%)", "MA5점수", "상대강도", "변동성",
-        "거래",
-        "총점",
+        "RR Pref", "Trend", "MA5 Slope %", "MA5 Score",
+        "Relative Strength", "Volatility", "Volume", "Score",
     ]
     df = df[[c for c in preferred_order if c in df.columns]]
 
     if max_rows and max_rows > 0:
         df = df.head(int(max_rows)).copy()
 
-    display_df_show = df.copy()
+    display_df = df.copy()
 
-    # ✅ KRW(정수로 보이게)
-    krw_cols = ["진입", "손절", "목표", "리스크", "보상"]
-    for c in krw_cols:
-        if c in display_df_show.columns:
-            display_df_show[c] = display_df_show[c].map(_fmt_int)
+    for col in ["Entry", "Stop", "Target"]:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].map(_fmt_int)
 
-    # ✅ 비율/점수 계열
-    float_cols = ["R/R", "RR선호", "추세", "MA5기울기(%)", "MA5점수", "상대강도", "변동성", "거래", "총점"]
-    for c in float_cols:
-        if c in display_df_show.columns:
-            # R/R 같은 건 2~3자리 취향. 우선 2자리 추천
-            display_df_show[c] = display_df_show[c].map(lambda v: _fmt_float(v, 3 if c == "R/R" else 2))
+    float_cols = ["R/R", "RR Pref", "Trend", "MA5 Slope %", "MA5 Score", "Relative Strength", "Volatility", "Volume", "Score"]
+    for col in float_cols:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].map(lambda v: _fmt_float(v, 3 if col == "R/R" else 2))
 
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    st.dataframe(display_df_show, use_container_width=True, hide_index=True)
-
-    # ---- picker ----
-    tickers = df["肄붾뱶"].astype(str).str.zfill(6).tolist() if "肄붾뱶" in df.columns else scan_df["ticker"].tolist()
+    tickers = df["Code"].astype(str).str.zfill(6).tolist() if "Code" in df.columns else scan_df["ticker"].tolist()
     if not tickers:
         return None
 

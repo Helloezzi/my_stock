@@ -1,33 +1,20 @@
 # PROTOCOL
 
-## Change Protocol
-- Prefer preserving the current flow: `download daily -> merge parquet -> load universe -> scan -> render`.
-- Keep new business logic in `core/`, not `ui/`.
-- Keep rendering logic in `ui/`, not `app.py`.
-- If adding a strategy, register it in `core/strategies/__init__.py`.
+## Data Rules
+- `ticker` must stay zero-padded 6-digit text.
+- `date` should become pandas datetime early.
+- Daily file name: `krx_ohlcv_YYYYMMDD.csv`.
+- Cache file name: `<market>_merged.parquet`.
 
-## Data Protocol
-- Normalize `ticker` to zero-padded 6-digit string.
-- Normalize `date` to pandas datetime as early as possible.
-- Daily file naming currently expects `krx_ohlcv_YYYYMMDD.csv`.
-- Parquet cache naming currently expects `<market>_merged.parquet`.
+## App Rules
+- Flow stays `download -> merge -> load -> filter -> scan -> render`.
+- Sidebar is the source of scan parameters.
+- Register new strategies in `core/strategies/__init__.py`.
 
-## Scan Protocol
-- Build scan cache key from:
-  - latest date
-  - market
-  - top_n
-  - strategy label
-  - market filter mode
-  - strategy params
-- If any of the above changes, treat scan results as invalidated.
+## Cache Rules
+- Scan cache must vary on date, market, top-n, strategy, filter mode, and params.
+- If cache metadata is suspicious or corrupted, rebuild instead of trusting it.
 
-## UI/State Protocol
-- Sidebar is the only source of user scan parameters.
-- `st.session_state` owns selected ticker, active tab, scan signature, and scan results.
-- Scanner and Browse tabs maintain separate selected tickers.
-
-## Safety Protocol
-- If market data is empty, stop early with warning.
-- If KOSPI regime filter blocks, do not run or display fresh scanner results as valid picks.
-- If scan cache or levels JSON is corrupted, delete and rebuild it.
+## Safety Rules
+- Stop early on empty market data.
+- Do not present blocked market-filter runs as valid picks.
