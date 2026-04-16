@@ -1,13 +1,16 @@
 @echo off
 setlocal
 
-REM Update these values for your NAS environment if they change.
-set "NAS_HOST=dasol@192.168.124.101"
-set "NAS_PORT=22"
-set "REMOTE_DIR=/volume1/docker/my_stock"
-set "DOCKER_BIN=/usr/local/bin/docker"
-set "BACKFILL_START=2026-02-28"
-set "BACKFILL_END=2026-04-15"
+if exist "%~dp0deploy_nas.config.local.bat" (
+    call "%~dp0deploy_nas.config.local.bat"
+) else (
+    call "%~dp0deploy_nas.config.example.bat"
+)
+
+if /I "%NAS_HOST%"=="your-user@your-nas-host" (
+    echo Please create deploy_nas.config.local.bat from deploy_nas.config.example.bat and set your real NAS values.
+    exit /b 1
+)
 
 if "%~1"=="" goto :help
 if /I "%~1"=="deploy" goto :deploy
@@ -70,6 +73,13 @@ echo   deploy_nas.bat status
 echo   deploy_nas.bat logs
 echo   deploy_nas.bat backfill
 echo   deploy_nas.bat shell
+echo.
+echo Config source:
+if exist "%~dp0deploy_nas.config.local.bat" (
+    echo   deploy_nas.config.local.bat
+) else (
+    echo   deploy_nas.config.example.bat ^(example values only^)
+)
 echo.
 echo Current settings:
 echo   NAS_HOST=%NAS_HOST%

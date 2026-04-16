@@ -109,12 +109,14 @@
   - keep the current KOSPI market filter rule
 - Output count:
   - publish only top 10 to 20 picks
+- Published default scan params may be slightly looser than the interactive full-scan defaults to reduce zero-pick days.
 
 ## App Integration Plan
 ### Phase 1
 - Add a loader for `today_picks.json`.
 - If the file exists, mobile or lightweight mode should show it first.
 - Do not load full parquet buffers on the first lightweight screen.
+- In lightweight mode, prefer a compact summary-and-selection view over a full table on first render.
 
 ### Phase 2
 - Keep a manual or desktop path for full scan and exploration.

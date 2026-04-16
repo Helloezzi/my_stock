@@ -46,7 +46,10 @@ lightweight_today_picks = bool(
 )
 
 if lightweight_today_picks:
-    selected, scan_levels = render_today_picks(published)
+    selected, scan_levels = render_today_picks(
+        published,
+        lightweight_mode=sb.get("lightweight_mode", False),
+    )
 
     if selected and sb.get("show_chart", False):
         fp = daily_fingerprint()

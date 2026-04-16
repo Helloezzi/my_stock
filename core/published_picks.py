@@ -28,6 +28,12 @@ class PublishedPicksConfig:
     strategy_key: str = "pullback_rr"
     market_filter_mode: str = "close_above_ma20"
     output_limit: int = 10
+    tolerance: float = 0.04
+    stop_lookback: int = 10
+    stop_buffer: float = 0.005
+    target_lookback: int = 20
+    min_rr: float = 1.3
+    ma5_up_days: int = 0
 
 
 def _ensure_dirs() -> None:
@@ -81,8 +87,15 @@ def _get_strategy_by_key(strategy_key: str):
     return by_key[strategy_key]
 
 
-def _default_scan_params() -> ScanParams:
-    return ScanParams()
+def _default_scan_params(cfg: PublishedPicksConfig) -> ScanParams:
+    return ScanParams(
+        tolerance=cfg.tolerance,
+        stop_lookback=cfg.stop_lookback,
+        stop_buffer=cfg.stop_buffer,
+        target_lookback=cfg.target_lookback,
+        min_rr=cfg.min_rr,
+        ma5_up_days=cfg.ma5_up_days,
+    )
 
 
 def _resolve_markets(market: str) -> list[str]:
@@ -129,7 +142,7 @@ def build_published_picks(config: PublishedPicksConfig | None = None) -> tuple[d
     dfs, _ = load_all_markets()
     markets = _resolve_markets(cfg.market)
     strategy = _get_strategy_by_key(cfg.strategy_key)
-    params = _default_scan_params()
+    params = _default_scan_params(cfg)
     idx_df = load_kospi_index_1y()
     market_ok, market_msg = kospi_market_ok(idx_df, mode=cfg.market_filter_mode)
     name_map = _load_local_name_cache()

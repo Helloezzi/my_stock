@@ -1,18 +1,18 @@
 # SSH_ACCESS
 
 ## NAS SSH Connection
-- Host: `192.168.124.101`
+- Host: `your-nas-host`
 - Port: `22`
-- User: `dasol`
+- User: `your-user`
 
 ## PowerShell Command
 ```powershell
-ssh -p 22 dasol@192.168.124.101
+ssh -p 22 your-user@your-nas-host
 ```
 
 ## Project Directory After Login
 ```bash
-cd /volume1/docker/my_stock
+cd /your/deploy/path/my_stock
 ```
 
 ## Frequently Used Commands
@@ -30,7 +30,7 @@ sudo /usr/local/bin/docker logs --tail 200 my-stock
 
 ### Restart App
 ```bash
-cd /volume1/docker/my_stock
+cd /your/deploy/path/my_stock
 sudo /usr/local/bin/docker compose up -d --build
 ```
 
@@ -41,20 +41,20 @@ sudo /usr/local/bin/docker exec -it my-stock /bin/bash
 
 ### Run Published Picks Build
 ```bash
-cd /volume1/docker/my_stock
+cd /your/deploy/path/my_stock
 sudo /usr/local/bin/docker exec -it my-stock python scripts/build_today_picks.py --market ALL --limit 10
 ```
 
 ### Run Daily Output Check
 ```bash
-cd /volume1/docker/my_stock
+cd /your/deploy/path/my_stock
 sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.py
 ```
 
 ### Run Scheduled Daily Pipeline Manually
 ```bash
-cd /volume1/docker/my_stock
-sh scripts/run_nas_daily.sh
+cd /your/deploy/path/my_stock
+sudo sh scripts/run_nas_daily.sh
 ```
 
 ## Windows Batch Shortcut
@@ -63,7 +63,8 @@ sh scripts/run_nas_daily.sh
 ```
 
 ## Notes
+- Real NAS values should live in `deploy_nas.config.local.bat`, not in tracked files.
+- Copy `deploy_nas.config.example.bat` to `deploy_nas.config.local.bat` and fill in your real values.
 - SSH works on port `22`, not `2222`.
 - Docker binary on the NAS is `/usr/local/bin/docker`.
 - Python app scripts should be run inside the `my-stock` container, not on the NAS host OS.
-- If `git pull` is blocked by generated data before this cleanup is fully reflected on NAS, check `git status` first.

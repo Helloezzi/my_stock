@@ -22,7 +22,33 @@ def _fmt_float(x, digits=2):
         return str(x)
 
 
-def render_today_picks(payload: dict, state_key: str = "selected_scan_ticker") -> tuple[str | None, dict]:
+def _fmt_generated_at(value) -> str:
+    if value is None:
+        return "-"
+    try:
+        return pd.to_datetime(value).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(value)
+
+
+def _build_levels(records: list[dict]) -> dict:
+    levels = {}
+    for item in records:
+        ticker = str(item.get("ticker", "")).zfill(6)
+        levels[ticker] = {
+            "entry": item.get("entry"),
+            "stop": item.get("stop"),
+            "target": item.get("target"),
+            "rr": item.get("rr"),
+        }
+    return levels
+
+
+def render_today_picks(
+    payload: dict,
+    state_key: str = "selected_scan_ticker",
+    lightweight_mode: bool = True,
+) -> tuple[str | None, dict]:
     picks = payload.get("picks", []) if isinstance(payload, dict) else []
     summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
     source = payload.get("source", {}) if isinstance(payload, dict) else {}
@@ -65,6 +91,13 @@ def render_today_picks(payload: dict, state_key: str = "selected_scan_ticker") -
         st.info(f"No published picks available for {selected_market}.")
         return None, {}
 
+    generated_at = _fmt_generated_at(payload.get("generated_at"))
+    per_market_counts = summary.get("per_market_counts", {}) if isinstance(summary, dict) else {}
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Generated", generated_at)
+    m2.metric("KOSPI", int(per_market_counts.get("KOSPI", 0)))
+    m3.metric("KOSDAQ", int(per_market_counts.get("KOSDAQ", 0)))
+
     keep_cols = ["rank", "ticker", "name", "market", "date", "stage", "entry", "stop", "target", "rr", "score"]
     raw_df = filtered_df[[c for c in keep_cols if c in filtered_df.columns]].copy()
     display_df = raw_df.rename(
@@ -90,8 +123,6 @@ def render_today_picks(payload: dict, state_key: str = "selected_scan_ticker") -
         if col in display_df.columns:
             display_df[col] = display_df[col].map(lambda v: _fmt_float(v, 3 if col == "R/R" else 2))
 
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
     filtered_records = raw_df.to_dict("records")
     tickers = [str(item.get("ticker", "")).zfill(6) for item in filtered_records if item.get("ticker")]
     if not tickers:
@@ -106,22 +137,50 @@ def render_today_picks(payload: dict, state_key: str = "selected_scan_ticker") -
         str(item.get("ticker", "")).zfill(6): item.get("name", str(item.get("ticker", "")).zfill(6))
         for item in filtered_records
     }
+
+    if lightweight_mode:
+        st.caption("Mobile-first view: quick summary first, full table only when needed.")
+
+        selected_record = next(
+            (item for item in filtered_records if str(item.get("ticker", "")).zfill(6) == current),
+            filtered_records[0],
+        )
+        info1, info2, info3 = st.columns(3)
+        info1.metric("Rank", int(selected_record.get("rank", 0) or 0))
+        info2.metric("R/R", _fmt_float(selected_record.get("rr"), 3) or "-")
+        info3.metric("Score", _fmt_float(selected_record.get("score"), 2) or "-")
+
+        st.write(
+            f"Selected snapshot: **{str(selected_record.get('ticker', '')).zfill(6)} - "
+            f"{name_map.get(str(selected_record.get('ticker', '')).zfill(6), '-') }** | "
+            f"Stage: **{selected_record.get('stage', '-') }** | "
+            f"Entry: **{_fmt_int(selected_record.get('entry')) or '-'}** | "
+            f"Stop: **{_fmt_int(selected_record.get('stop')) or '-'}** | "
+            f"Target: **{_fmt_int(selected_record.get('target')) or '-'}**"
+        )
+
     pick = st.selectbox(
         "Pick from daily results",
         options=tickers,
         index=tickers.index(current),
-        format_func=lambda x: f"{x} - {name_map.get(x, x)}",
+        format_func=lambda x: next(
+            (
+                f"#{int(item.get('rank', 0) or 0)} | {x} - {name_map.get(x, x)} | "
+                f"R/R {_fmt_float(item.get('rr'), 2) or '-'}"
+                for item in filtered_records
+                if str(item.get("ticker", "")).zfill(6) == x
+            ),
+            f"{x} - {name_map.get(x, x)}",
+        ),
         key=f"{state_key}_today_picks_selectbox",
     )
     st.session_state[state_key] = pick
 
-    levels = {}
-    for item in filtered_records:
-        ticker = str(item.get("ticker", "")).zfill(6)
-        levels[ticker] = {
-            "entry": item.get("entry"),
-            "stop": item.get("stop"),
-            "target": item.get("target"),
-            "rr": item.get("rr"),
-        }
+    if lightweight_mode:
+        with st.expander("Show full picks table"):
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    levels = _build_levels(filtered_records)
     return pick, levels

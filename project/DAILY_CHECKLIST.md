@@ -54,3 +54,12 @@ sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.
 - Recent daily files exist for both markets
 - `today_picks.json` exists and parses cleanly
 - Mobile lightweight screen shows the same picks without full-scan delay
+
+## Current Known-Good Example
+- Verified on `2026-04-16`
+- `latest_daily_file`: `krx_ohlcv_20260416.csv`
+- `cache_max_date`: `2026-04-16`
+- `trade_date`: `2026-04-16`
+- `strategy`: `pullback_rr`
+- `pick_count`: `20`
+- `per_market_counts`: `KOSPI 10`, `KOSDAQ 10`

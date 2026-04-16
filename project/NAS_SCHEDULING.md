@@ -20,7 +20,7 @@ Why `18:30`:
 
 ## Script Path
 ```bash
-/volume1/docker/my_stock/scripts/run_nas_daily.sh
+/your/deploy/path/my_stock/scripts/run_nas_daily.sh
 ```
 
 ## What The Script Does
@@ -28,32 +28,33 @@ Why `18:30`:
 2. Ensures the Docker app is up.
 3. Runs one-day FDR collection for today.
 4. Rebuilds `today_picks.json`.
-5. Runs the daily output check.
+5. Optionally sends email if `mail.config.local.json` exists.
+6. Runs the daily output check.
 
 ## Synology Task Scheduler Example
 - Task type:
   - User-defined script
 - User:
-  - a user that can run Docker commands, or root if needed
+  - `root`
 - Schedule:
   - Weekly
   - Mon, Tue, Wed, Thu, Fri
   - 18:30
 - Script:
 ```bash
-cd /volume1/docker/my_stock
+cd /your/deploy/path/my_stock
 sh scripts/run_nas_daily.sh
 ```
 
 ## Cron Example
 ```cron
-30 18 * * 1-5 cd /volume1/docker/my_stock && sh scripts/run_nas_daily.sh >> /volume1/docker/my_stock/data/_locks/nas_daily.log 2>&1
+30 18 * * 1-5 cd /your/deploy/path/my_stock && sh scripts/run_nas_daily.sh >> /your/deploy/path/my_stock/data/_locks/nas_daily.log 2>&1
 ```
 
 ## Manual Test Command
 ```bash
-cd /volume1/docker/my_stock
-sh scripts/run_nas_daily.sh
+cd /your/deploy/path/my_stock
+sudo sh scripts/run_nas_daily.sh
 ```
 
 ## Expected Result
@@ -61,6 +62,20 @@ sh scripts/run_nas_daily.sh
 - `data/daily/kosdaq/krx_ohlcv_YYYYMMDD.csv` updated
 - `data/picks/today_picks.json` updated
 - `scripts/check_daily_outputs.py` reports fresh dates and non-broken picks payload
+
+## Verified Status
+- Verified on: `2026-04-16`
+- Verification command:
+```bash
+sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.py
+```
+- Observed healthy output:
+  - `latest_daily_file`: `krx_ohlcv_20260416.csv` for both markets
+  - `cache_max_date`: `2026-04-16` for both markets
+  - `trade_date`: `2026-04-16`
+  - `strategy`: `pullback_rr`
+  - `pick_count`: `20`
+  - `per_market_counts`: `KOSPI 10`, `KOSDAQ 10`
 
 ## If It Fails
 - Check container status:
@@ -74,6 +89,6 @@ sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.
 ```
 - Re-run manually:
 ```bash
-cd /volume1/docker/my_stock
-sh scripts/run_nas_daily.sh
+cd /your/deploy/path/my_stock
+sudo sh scripts/run_nas_daily.sh
 ```

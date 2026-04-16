@@ -8,6 +8,8 @@ env/
 
 .DS_Store
 .vscode/
+deploy_nas.config.local.bat
+mail.config.local.json
 
 # data artifacts
 data/*.csv

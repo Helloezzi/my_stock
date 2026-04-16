@@ -39,10 +39,10 @@ This file records working decisions so future implementation does not need to re
 - Daily data collection should be automated.
 - End-of-day scanning should also be automated.
 - The first automation target is local/NAS batch execution, not a new infrastructure layer.
+- Optional email delivery should reuse the same published daily picks output.
 
 ## Deferred For Later
 - Replacing Streamlit with a lighter web stack.
-- Adding email delivery of daily picks.
 - Building a separate API server or database-backed architecture.
 
 ## Working Rule

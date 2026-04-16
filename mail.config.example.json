@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "smtp_host": "smtp.example.com",
+  "smtp_port": 465,
+  "security": "ssl",
+  "smtp_username": "your-account@example.com",
+  "smtp_password": "your-app-password",
+  "from_email": "your-account@example.com",
+  "to_emails": [
+    "your-receiver@example.com"
+  ],
+  "subject_prefix": "[my_stock]"
+}
