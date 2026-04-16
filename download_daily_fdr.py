@@ -127,7 +127,9 @@ def _save_daily_files(df: pd.DataFrame, out_dir: Path) -> int:
     for day, day_df in df.groupby(df["date"].dt.strftime("%Y%m%d")):
         out_path = out_dir / f"krx_ohlcv_{day}.csv"
         day_df = day_df.copy()
+        day_df["date"] = pd.to_datetime(day_df["date"], errors="coerce").dt.strftime("%Y%m%d")
         day_df["ticker"] = day_df["ticker"].astype(str).str.zfill(6)
+        day_df = day_df.dropna(subset=["date"])
         day_df = day_df.drop_duplicates(subset=["date", "ticker"], keep="last")
         day_df = day_df.sort_values(["ticker", "date"]).reset_index(drop=True)
         day_df.to_csv(out_path, index=False, encoding="utf-8-sig")
