@@ -48,7 +48,7 @@ sudo /usr/local/bin/docker exec -it my-stock python scripts/build_today_picks.py
 ### Run Daily Output Check
 ```bash
 cd /volume1/docker/my_stock
-python scripts/check_daily_outputs.py
+sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.py
 ```
 
 ## Windows Batch Shortcut
@@ -59,4 +59,5 @@ python scripts/check_daily_outputs.py
 ## Notes
 - SSH works on port `22`, not `2222`.
 - Docker binary on the NAS is `/usr/local/bin/docker`.
+- Python app scripts should be run inside the `my-stock` container, not on the NAS host OS.
 - If `git pull` is blocked by generated data before this cleanup is fully reflected on NAS, check `git status` first.

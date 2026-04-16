@@ -17,7 +17,7 @@ def _latest_daily_file(market: str) -> Path | None:
     daily_dir = DATA_DIR / "daily" / market
     if not daily_dir.exists():
         return None
-    files = sorted(daily_dir.glob("krx_ohlcv_*.csv"))
+    files = sorted(list(daily_dir.glob("krx_ohlcv_*.csv")) + list(daily_dir.glob("ohlcv_*.csv")))
     return files[-1] if files else None
 
 

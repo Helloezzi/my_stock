@@ -47,6 +47,30 @@ def _load_tickers_from_cache(market: str) -> list[str]:
     return []
 
 
+def _load_tickers_from_listing(market: str) -> list[str]:
+    try:
+        df = fdr.StockListing("KRX")
+    except Exception:
+        return []
+
+    if df is None or df.empty or "Code" not in df.columns:
+        return []
+
+    out = df.copy()
+    if "Market" in out.columns:
+        target = str(market).upper().strip()
+        out = out[out["Market"].astype(str).str.upper() == target].copy()
+
+    tickers = (
+        out["Code"]
+        .astype(str)
+        .str.replace("A", "", regex=False)
+        .str.strip()
+        .str.zfill(6)
+    )
+    return tickers[tickers.str.fullmatch(r"\d{6}", na=False)].drop_duplicates().tolist()
+
+
 def _load_universe(path: Path, limit: int | None = None) -> list[str]:
     tickers: list[str] = []
 
@@ -63,6 +87,8 @@ def _load_universe(path: Path, limit: int | None = None) -> list[str]:
     else:
         market = "kosdaq" if "kosdaq" in path.name.lower() else "kospi"
         tickers = _load_tickers_from_cache(market)
+        if not tickers:
+            tickers = _load_tickers_from_listing(market)
 
     if not tickers:
         raise FileNotFoundError(f"Universe not found and no cache fallback available: {path}")
@@ -99,7 +125,7 @@ def _save_daily_files(df: pd.DataFrame, out_dir: Path) -> int:
     saved = 0
 
     for day, day_df in df.groupby(df["date"].dt.strftime("%Y%m%d")):
-        out_path = out_dir / f"ohlcv_{day}.csv"
+        out_path = out_dir / f"krx_ohlcv_{day}.csv"
         day_df = day_df.copy()
         day_df["ticker"] = day_df["ticker"].astype(str).str.zfill(6)
         day_df = day_df.drop_duplicates(subset=["date", "ticker"], keep="last")
