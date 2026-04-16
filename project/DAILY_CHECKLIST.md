@@ -12,8 +12,8 @@
 5. The app shows the same result on the lightweight scanner screen.
 
 ## Fast Command
-```powershell
-python scripts/check_daily_outputs.py
+```bash
+sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.py
 ```
 
 ## Manual Checklist

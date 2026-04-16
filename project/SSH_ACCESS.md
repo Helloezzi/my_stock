@@ -51,6 +51,12 @@ cd /volume1/docker/my_stock
 sudo /usr/local/bin/docker exec -it my-stock python scripts/check_daily_outputs.py
 ```
 
+### Run Scheduled Daily Pipeline Manually
+```bash
+cd /volume1/docker/my_stock
+sh scripts/run_nas_daily.sh
+```
+
 ## Windows Batch Shortcut
 ```powershell
 .\deploy_nas.bat shell
