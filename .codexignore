@@ -1,0 +1,36 @@
+# Codex should focus on source code and lightweight docs.
+# Ignore generated data, caches, editor files, and Python bytecode.
+
+.git/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+
+.venv/
+venv/
+env/
+
+# Generated market data and caches
+data/cache/
+data/daily/
+data/scan_cache/
+data/_locks/
+
+# Large or generated local data files
+data/*.csv
+data/*.parquet
+data/*.json
+
+# OS noise
+.DS_Store
+
+# Legacy / currently unused code paths
+download_daily_yf.py
+download_kospi_yf.py
+download_kosdaq_yf.py
+download_kospi.py
+ui/data_view.py
+core/bootstrap_daily.py
+core/test_date_20260227.py
+krx_test.py
