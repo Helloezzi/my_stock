@@ -20,6 +20,8 @@
 
 ## Read This First
 - `project/DECISIONS.md`: agreed product and architecture direction.
+- `project/DAILY_CHECKLIST.md`: daily operations verification checklist.
+- `project/SSH_ACCESS.md`: NAS SSH access and common commands.
 - `app.py`: app entry.
 - `core/app_runtime.py`: load data and build runtime bundle.
 - `core/data_loader.py`: stable import surface for data loading helpers.
