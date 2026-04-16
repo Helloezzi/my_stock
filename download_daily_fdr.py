@@ -20,16 +20,53 @@ KOSPI = MarketSpec("kospi", Path("data/universe_kospi.csv"))
 KOSDAQ = MarketSpec("kosdaq", Path("data/universe_kosdaq.csv"))
 
 
+def _load_tickers_from_cache(market: str) -> list[str]:
+    cache_candidates = [
+        Path(f"data/cache/{market}_merged.parquet"),
+        Path(f"/app/data/cache/{market}_merged.parquet"),
+    ]
+
+    for path in cache_candidates:
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_parquet(path, columns=["ticker"])
+            tickers = (
+                df["ticker"]
+                .astype(str)
+                .str.replace("A", "", regex=False)
+                .str.strip()
+                .str.zfill(6)
+            )
+            tickers = tickers[tickers.str.fullmatch(r"\d{6}", na=False)].drop_duplicates().tolist()
+            if tickers:
+                return tickers
+        except Exception:
+            continue
+
+    return []
+
+
 def _load_universe(path: Path, limit: int | None = None) -> list[str]:
-    df = pd.read_csv(path, dtype={"ticker": str})
-    tickers = (
-        df["ticker"]
-        .astype(str)
-        .str.replace("A", "", regex=False)
-        .str.strip()
-        .str.zfill(6)
-    )
-    tickers = tickers[tickers.str.fullmatch(r"\d{6}", na=False)].drop_duplicates().tolist()
+    tickers: list[str] = []
+
+    if path.exists():
+        df = pd.read_csv(path, dtype={"ticker": str})
+        tickers = (
+            df["ticker"]
+            .astype(str)
+            .str.replace("A", "", regex=False)
+            .str.strip()
+            .str.zfill(6)
+        )
+        tickers = tickers[tickers.str.fullmatch(r"\d{6}", na=False)].drop_duplicates().tolist()
+    else:
+        market = "kosdaq" if "kosdaq" in path.name.lower() else "kospi"
+        tickers = _load_tickers_from_cache(market)
+
+    if not tickers:
+        raise FileNotFoundError(f"Universe not found and no cache fallback available: {path}")
+
     return tickers[:limit] if limit else tickers
 
 
