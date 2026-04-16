@@ -31,13 +31,13 @@ ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN
 goto :eof
 
 :full
-echo [full] deploy + backfill + logs
-ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN% rm -f my-stock >/dev/null 2>&1 || true && sudo %DOCKER_BIN% compose up -d --build && sudo %DOCKER_BIN% exec -i my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END% && sudo %DOCKER_BIN% logs --tail 120 my-stock"
+echo [full] deploy + backfill + publish picks + logs
+ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN% rm -f my-stock >/dev/null 2>&1 || true && sudo %DOCKER_BIN% compose up -d --build && sudo %DOCKER_BIN% exec -i my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END% && sudo %DOCKER_BIN% exec -i my-stock python scripts/build_today_picks.py --market ALL --limit 10 && sudo %DOCKER_BIN% logs --tail 120 my-stock"
 goto :eof
 
 :fastfull
-echo [fastfull] fast restart + backfill + logs
-ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN% rm -f my-stock >/dev/null 2>&1 || true && sudo %DOCKER_BIN% compose up -d && sudo %DOCKER_BIN% exec -i my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END% && sudo %DOCKER_BIN% logs --tail 120 my-stock"
+echo [fastfull] fast restart + backfill + publish picks + logs
+ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN% rm -f my-stock >/dev/null 2>&1 || true && sudo %DOCKER_BIN% compose up -d && sudo %DOCKER_BIN% exec -i my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END% && sudo %DOCKER_BIN% exec -i my-stock python scripts/build_today_picks.py --market ALL --limit 10 && sudo %DOCKER_BIN% logs --tail 120 my-stock"
 goto :eof
 
 :status
@@ -51,8 +51,8 @@ ssh -t -p %NAS_PORT% %NAS_HOST% "sudo %DOCKER_BIN% logs --tail 200 my-stock"
 goto :eof
 
 :backfill
-echo [backfill] %BACKFILL_START% to %BACKFILL_END%
-ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && sudo %DOCKER_BIN% exec -it my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END%"
+echo [backfill] %BACKFILL_START% to %BACKFILL_END% + publish picks
+ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && sudo %DOCKER_BIN% exec -it my-stock python download_daily_fdr.py --start %BACKFILL_START% --end %BACKFILL_END% && sudo %DOCKER_BIN% exec -it my-stock python scripts/build_today_picks.py --market ALL --limit 10"
 goto :eof
 
 :shell
