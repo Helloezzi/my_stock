@@ -13,6 +13,7 @@ if /I "%NAS_HOST%"=="your-user@your-nas-host" (
 )
 
 if "%~1"=="" goto :help
+if /I "%~1"=="quick" goto :quick
 if /I "%~1"=="deploy" goto :deploy
 if /I "%~1"=="fast" goto :fast
 if /I "%~1"=="full" goto :full
@@ -22,6 +23,11 @@ if /I "%~1"=="logs" goto :logs
 if /I "%~1"=="backfill" goto :backfill
 if /I "%~1"=="shell" goto :shell
 goto :help
+
+:quick
+echo [quick] git pull + rebuild/restart only ^(for UI/text/layout updates^)
+ssh -t -p %NAS_PORT% %NAS_HOST% "cd %REMOTE_DIR% && git pull && sudo %DOCKER_BIN% rm -f my-stock >/dev/null 2>&1 || true && sudo %DOCKER_BIN% compose up -d --build"
+goto :eof
 
 :deploy
 echo [deploy] git pull + remove stale container + docker compose up -d --build
@@ -65,6 +71,7 @@ goto :eof
 
 :help
 echo Usage:
+echo   deploy_nas.bat quick
 echo   deploy_nas.bat deploy
 echo   deploy_nas.bat fast
 echo   deploy_nas.bat full

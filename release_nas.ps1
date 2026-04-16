@@ -1,7 +1,7 @@
 param(
     [string]$Message = "",
 
-    [ValidateSet("deploy", "fast", "full", "fastfull")]
+    [ValidateSet("quick", "deploy", "fast", "full", "fastfull")]
     [string]$Mode = "deploy",
 
     [string]$Branch = "main",
