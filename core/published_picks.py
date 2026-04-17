@@ -102,7 +102,9 @@ def _enrich_name_cache_for_tickers(tickers: list[str], fallback_map: dict[str, s
         return fallback_map
 
     try:
-        resolved = get_ticker_name_map(missing, online_lookup=True)
+        # Daily/lightweight published picks should stay fully local.
+        # This avoids noisy KRX login attempts on NAS when no credentials exist.
+        resolved = get_ticker_name_map(missing, online_lookup=False)
     except Exception:
         return fallback_map
 

@@ -46,6 +46,33 @@ cd /your/deploy/path/my_stock
 sh scripts/run_nas_daily.sh
 ```
 
+Important:
+- The task should run as `root`.
+- Running as a normal user such as `dasol` will usually fail on Docker socket access.
+- If manual execution works only with `sudo sh scripts/run_nas_daily.sh`, the scheduler user is the first thing to check.
+
+## If Manual Works But Scheduler Does Not
+- Most common cause:
+  - The task is not running as `root`.
+- Other common causes:
+  - The task is disabled or the weekday/time is wrong.
+  - The script path is different from the real deploy path.
+  - The scheduler command does not `cd` into the project directory first.
+  - The scheduler ran, but stdout/stderr was not checked.
+
+Recommended scheduler script:
+```bash
+cd /volume1/docker/my_stock
+sh scripts/run_nas_daily.sh >> /volume1/docker/my_stock/data/_locks/nas_daily.log 2>&1
+```
+
+What to verify in Synology:
+- Task is `Enabled`
+- User is `root`
+- Schedule is weekday `18:30` in NAS local time
+- Working script path matches the real project path
+- Task execution history shows a successful run
+
 ## Cron Example
 ```cron
 30 18 * * 1-5 cd /your/deploy/path/my_stock && sh scripts/run_nas_daily.sh >> /your/deploy/path/my_stock/data/_locks/nas_daily.log 2>&1
